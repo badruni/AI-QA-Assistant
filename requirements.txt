@@ -1,0 +1,4 @@
+# AI QA Assistant
+# Core modules: Python standard library
+# Frontend scanner
+playwright==1.65.1

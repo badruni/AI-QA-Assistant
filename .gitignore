@@ -1,0 +1,21 @@
+﻿.venv/
+__pycache__/
+*.py[cod]
+.env
+.DS_Store
+Thumbs.db
+
+# Scanner virtual environment
+.venv-scanner/
+
+# Data lokal dan data klien — jangan unggah ke GitHub
+/projects/
+/logs/
+/reports/
+/backups/
+/log.txt
+
+# File log dan konfigurasi rahasia
+*.log
+.env.*
+!.env.example

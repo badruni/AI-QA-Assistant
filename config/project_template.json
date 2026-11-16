@@ -1,0 +1,13 @@
+﻿{
+  "project_name": "Example Client",
+  "base_url": "https://example.com",
+  "cms_url": "",
+  "scan": {
+    "frontend_enabled": true,
+    "cms_enabled": false,
+    "check_images": true,
+    "check_links": true,
+    "max_requests_per_minute": 10,
+    "stop_after_consecutive_403": 3
+  }
+}
