@@ -570,71 +570,165 @@ def inspect_links(config, timeout_ms=30000):
                 )
 
                 links = _extract_page_links(page)
-
                 seen_urls = set()
 
-                for link in links:
-                    link_type, link_url = _classify_link(
-                        link["href"],
-                        page.url,
-                    )
+                api_context = playwright.request.new_context(
+                    timeout=timeout_ms,
+                    max_redirects=0,
+                )
 
-                    if link_type == "internal":
-                        dedup_key = link_url
-
-                    elif link_type == "anchor":
-                        dedup_key = link_url
-
-                    else:
-                        dedup_key = (
-                            link_type,
-                            link_url,
+                try:
+                    for link in links:
+                        link_type, link_url = _classify_link(
+                            link["href"],
+                            page.url,
                         )
 
-                    if dedup_key in seen_urls:
-                        continue
-
-                    seen_urls.add(dedup_key)
-
-                    if link_type == "internal":
-                        status = ResultStatus.INCONCLUSIVE
-                        message = "Tautan internal belum diperiksa."
-
-                    elif link_type == "external":
-                        status = ResultStatus.INCONCLUSIVE
-                        message = "Tautan eksternal tidak diperiksa."
-
-                    elif link_type == "anchor":
-                        anchor_id = link_url[1:]
-
-                        anchor_exists = (
-                            page.locator(
-                                f'[id="{anchor_id}"], [name="{anchor_id}"]'
-                            ).count()
-                            > 0
-                        )
-
-                        if anchor_exists:
-                            status = ResultStatus.PASSED
-                            message = "Target anchor ditemukan pada halaman."
+                        if link_type in ("internal", "anchor"):
+                            dedup_key = link_url
                         else:
-                            status = ResultStatus.FAILED
-                            message = "Target anchor tidak ditemukan pada halaman."
+                            dedup_key = (link_type, link_url)
 
-                    else:
-                        status = ResultStatus.INCONCLUSIVE
-                        message = "Protokol khusus tidak diperiksa."
+                        if dedup_key in seen_urls:
+                            continue
 
-                    results.append(
-                        LinkInspectionResult(
-                            link_url=link_url,
-                            link_text=link["text"],
-                            link_type=link_type,
-                            http_status=None,
-                            status=status,
-                            message=message,
+                        seen_urls.add(dedup_key)
+
+                        http_status = None
+                        stop_scan = False
+
+                        if link_type == "internal":
+                            if not guard.is_allowed_url(link_url):
+                                status = ResultStatus.INCONCLUSIVE
+                                message = (
+                                    "Tautan tidak memenuhi pembatasan origin."
+                                )
+                            else:
+                                try:
+                                    controller.acquire()
+
+                                    response = api_context.get(
+                                        link_url,
+                                        timeout=timeout_ms,
+                                        max_redirects=0,
+                                        fail_on_status_code=False,
+                                    )
+
+                                    http_status = response.status
+
+                                    try:
+                                        controller.record_response(
+                                            http_status
+                                        )
+                                    except RequestSafetyStop as exc:
+                                        status = (
+                                            ResultStatus.ACCESS_RESTRICTED
+                                        )
+                                        message = str(exc)
+                                        stop_scan = True
+                                    else:
+                                        if 200 <= http_status < 300:
+                                            status = ResultStatus.PASSED
+                                            message = (
+                                                "Tautan merespons HTTP "
+                                                f"{http_status}."
+                                            )
+                                        elif http_status in (401, 403):
+                                            status = (
+                                                ResultStatus.ACCESS_RESTRICTED
+                                            )
+                                            message = (
+                                                "Akses tautan dibatasi "
+                                                f"(HTTP {http_status})."
+                                            )
+                                        elif 300 <= http_status < 400:
+                                            status = (
+                                                ResultStatus.INCONCLUSIVE
+                                            )
+                                            message = (
+                                                "Redirect tidak diikuti "
+                                                f"(HTTP {http_status})."
+                                            )
+                                        elif 400 <= http_status <= 599:
+                                            status = ResultStatus.FAILED
+                                            message = (
+                                                "Tautan merespons HTTP "
+                                                f"{http_status}."
+                                            )
+                                        else:
+                                            status = (
+                                                ResultStatus.INCONCLUSIVE
+                                            )
+                                            message = (
+                                                "Respons HTTP tidak dapat "
+                                                "diklasifikasikan."
+                                            )
+
+                                except RequestSafetyStop as exc:
+                                    status = ResultStatus.ACCESS_RESTRICTED
+                                    message = str(exc)
+                                    stop_scan = True
+
+                                except PlaywrightTimeoutError:
+                                    status = ResultStatus.TIMEOUT
+                                    message = (
+                                        "Pemeriksaan tautan melewati batas "
+                                        "waktu."
+                                    )
+
+                                except PlaywrightError:
+                                    status = ResultStatus.INCONCLUSIVE
+                                    message = (
+                                        "Request tidak dapat diselesaikan "
+                                        "oleh Playwright."
+                                    )
+
+                        elif link_type == "external":
+                            status = ResultStatus.INCONCLUSIVE
+                            message = "Tautan eksternal tidak diperiksa."
+
+                        elif link_type == "anchor":
+                            anchor_id = link_url[1:]
+
+                            anchor_exists = (
+                                page.locator(
+                                    f'[id="{anchor_id}"], '
+                                    f'[name="{anchor_id}"]'
+                                ).count() > 0
+                            )
+
+                            if anchor_exists:
+                                status = ResultStatus.PASSED
+                                message = (
+                                    "Target anchor ditemukan pada halaman."
+                                )
+                            else:
+                                status = ResultStatus.FAILED
+                                message = (
+                                    "Target anchor tidak ditemukan "
+                                    "pada halaman."
+                                )
+
+                        else:
+                            status = ResultStatus.INCONCLUSIVE
+                            message = "Protokol khusus tidak diperiksa."
+
+                        results.append(
+                            LinkInspectionResult(
+                                link_url=link_url,
+                                link_text=link["text"],
+                                link_type=link_type,
+                                http_status=http_status,
+                                status=status,
+                                message=message,
+                            )
                         )
-                    )
+
+                        if stop_scan:
+                            break
+
+                finally:
+                    api_context.dispose()
 
             finally:
                 context.close()

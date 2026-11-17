@@ -1,4 +1,4 @@
-﻿# AI QA Assistant — Portable Setup Guide
+# AI QA Assistant — Portable Setup Guide
 
 ## Tujuan
 Panduan untuk memindahkan dan menjalankan AI QA Assistant pada laptop lain.
@@ -63,14 +63,15 @@ Data klien, log, laporan, evidence, backup, serta virtual environment tidak dise
 - Homepage Inspection: selesai.
 - WAF Detection: selesai dan diuji dengan simulasi lokal.
 - Broken Images: selesai diimplementasikan; 3 test lulus.
-- Broken Links: belum dibuat.
+- Broken Links Inspection: selesai diimplementasikan dan diuji.
+- Broken Links Inspection: 8 test lulus menggunakan server lokal.
 - Homepage Inspection: 7 test lulus.
 - HTTP Response Details: status code, status text, dan preview response body hingga 500 karakter.
-- Regression test: 53 test lulus.
+- Regression test terbaru: 61 test lulus, 0 gagal.
 
 ## Checkpoint lanjutan
 
-Lanjutkan pengembangan pemeriksaan Broken Links pada frontend scanner.
+Lanjutkan pengembangan Article Listing Inspection, meliputi pagination, filter artikel, perubahan heading dinamis, dan validasi perubahan daftar artikel.
 
 Paket ini merupakan snapshot pengembangan, bukan rilis produksi.
 

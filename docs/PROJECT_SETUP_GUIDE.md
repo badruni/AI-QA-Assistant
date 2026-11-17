@@ -1,4 +1,4 @@
-﻿# AI QA Assistant - Project Setup Guide
+# AI QA Assistant - Project Setup Guide
 
 ## 1. Tujuan
 AI QA Assistant adalah aplikasi black-box QA untuk menguji website client melalui URL frontend dan, jika diizinkan serta tersedia, akun CMS.
@@ -137,6 +137,8 @@ Periksa kebijakan perusahaan sebelum memindahkan data client, laporan, screensho
 - Homepage Inspection: selesai dan diuji
 - WAF Detection: selesai dan diuji dengan simulasi lokal
 - Broken Images Inspection: selesai dan diuji
+- Broken Links Inspection: selesai diimplementasikan dan diuji
+- Regression test scanner: 61 test berhasil
 - CMS automation: belum dibuat
 - AI/Ollama integration: belum dibuat
 
@@ -248,10 +250,43 @@ Pembaruan 2026-11-16:
 - Memverifikasi 7 test Homepage Inspection lulus.
 - Memverifikasi seluruh 53 regression test lulus.
 
+Pembaruan 2026-11-17:
+- Mengimplementasikan Broken Links Inspection pada frontend scanner.
+- Memeriksa link internal menggunakan HTTP request tanpa mengikuti redirect.
+- Mengklasifikasikan status HTTP: 2xx, 3xx, 4xx, 5xx, dan akses terbatas.
+- Memeriksa anchor link dan menghindari pemeriksaan berulang untuk URL internal yang sama.
+- Link eksternal tidak diperiksa otomatis.
+- Request pemeriksaan tidak menggunakan cookie browser.
+- Menghentikan pemeriksaan sesuai batas keamanan setelah threshold 403 tercapai.
+- Menambahkan 8 test Broken Links Inspection menggunakan server lokal.
+- Memverifikasi seluruh 61 regression test berhasil; 0 gagal.
 ## 16. Catatan pengembangan berikutnya
-- Membuat pemeriksaan Broken Links.
+
+### Article Listing Inspection
+
+Pemeriksaan daftar artikel akan mencakup:
+
+- Pagination Inspection: memastikan perpindahan halaman benar-benar mengubah daftar artikel.
+- Memastikan artikel pada Page 1, Page 2, Page 3, dan Page 5 sesuai dengan halaman yang dipilih.
+- Memastikan indikator halaman aktif ikut berubah.
+- Mendeteksi daftar artikel yang tidak berubah atau berisi duplikasi tidak wajar.
+- Mendukung pagination dinamis/AJAX tanpa mengharuskan reload halaman.
+- Article Filter Inspection: memeriksa filter Latest, Trending, Popular, dan Event.
+- Dynamic Section Header Inspection:
+  - Latest: Latest Article.
+  - Trending: More Trending.
+  - Popular: More Popular.
+  - Event: Latest Event.
+- Memastikan filter aktif, heading, dan daftar artikel sesuai pilihan.
+- Memeriksa konsistensi pagination setelah filter berubah.
+- Memeriksa error JavaScript selama interaksi.
+- Mengumpulkan screenshot evidence sebelum dan sesudah interaksi.
+
+Pengembangan berikutnya:
 - Memastikan hasil pemeriksaan dan data setiap client terpisah.
 - Menyimpan screenshot dan evidence secara terstruktur.
 - Menyusun laporan bug berdasarkan bukti.
-- Menambahkan pemeriksaan responsive dan interaksi setelah fondasi scanner stabil.
+- Menambahkan pemeriksaan responsive dan interaksi.
 - CMS automation dilakukan setelah akses dan izin tersedia.
+
+Article Listing Inspection dikembangkan sebagai modul terpisah dari Broken Links Inspection.
