@@ -259,10 +259,12 @@ Pembaruan 2026-11-17:
 - Request pemeriksaan tidak menggunakan cookie browser.
 - Menghentikan pemeriksaan sesuai batas keamanan setelah threshold 403 tercapai.
 - Menambahkan 8 test Broken Links Inspection menggunakan server lokal.
-- Memverifikasi seluruh 61 regression test berhasil; 0 gagal.
+- Pada pembaruan sebelumnya, 61 regression test berhasil; 0 gagal.
 ## 16. Catatan pengembangan berikutnya
 
-### Article Listing Inspection
+### Specialized Inspection: Article Listing (conditional)
+
+Article Listing Inspection hanya dijalankan jika Website Discovery menemukan halaman atau komponen daftar artikel yang relevan. Ketiadaan fitur artikel pada website bukan bug.
 
 Pemeriksaan daftar artikel akan mencakup:
 
@@ -290,3 +292,29 @@ Pengembangan berikutnya:
 - CMS automation dilakukan setelah akses dan izin tersedia.
 
 Article Listing Inspection dikembangkan sebagai modul terpisah dari Broken Links Inspection.
+## 17. Website Discovery
+
+Pembaruan 2026-11-17:
+
+- Mengimplementasikan modul `modules/website_discovery.py`.
+- Menambahkan penemuan halaman internal berdasarkan tautan yang ditemukan.
+- Membatasi discovery maksimum 20 halaman per pemindaian pada implementasi awal.
+- Menggunakan PlaywrightRequestGuard dan RequestSafetyController yang sudah tersedia.
+- Hanya mengunjungi URL dalam origin proyek yang diizinkan.
+- Redirect lintas origin tidak diikuti.
+- Mendeteksi heading, navigasi, link, button, form, input, gambar, dan kandidat card.
+- Menghasilkan klasifikasi awal homepage, product, article, form, listing, dan unknown.
+- Klasifikasi merupakan inferensi berdasarkan URL dan struktur DOM, bukan kepastian fungsi halaman.
+- Menyimpan screenshot halaman yang berhasil diperiksa.
+- Tidak mengirim formulir atau menekan tombol yang dapat mengubah data.
+- Tidak melakukan bypass CAPTCHA, Cloudflare, WAF, atau mekanisme keamanan lainnya.
+- Akses terbatas dan kendala teknis tidak otomatis dianggap sebagai bug website.
+- Menambahkan 6 test Website Discovery menggunakan server lokal.
+- Memverifikasi seluruh 67 regression test berhasil; 0 gagal.
+
+Catatan keamanan:
+- Hindari mencatat exception mentah browser atau jaringan ke log.
+- Gunakan metadata aman untuk aktivitas dan hasil proses.
+- Filter sensitive data merupakan perlindungan tambahan, bukan jaminan bahwa seluruh rahasia terdeteksi.
+
+Batas 20 halaman merupakan batas maksimum awal dan dapat dievaluasi berdasarkan kondisi website serta hasil pengujian lapangan.

@@ -63,18 +63,41 @@ Data klien, log, laporan, evidence, backup, serta virtual environment tidak dise
 - Homepage Inspection: selesai.
 - WAF Detection: selesai dan diuji dengan simulasi lokal.
 - Broken Images: selesai diimplementasikan; 3 test lulus.
-- Broken Links Inspection: selesai diimplementasikan dan diuji.
-- Broken Links Inspection: 8 test lulus menggunakan server lokal.
+- Broken Links Inspection: selesai diimplementasikan; 8 test lulus menggunakan server lokal.
+- Regression test terbaru: 67 test lulus, 0 gagal.
 - Homepage Inspection: 7 test lulus.
 - HTTP Response Details: status code, status text, dan preview response body hingga 500 karakter.
-- Regression test terbaru: 61 test lulus, 0 gagal.
+- Website Discovery: selesai diimplementasikan; 6 test lulus.
 
 ## Checkpoint lanjutan
 
-Lanjutkan pengembangan Article Listing Inspection, meliputi pagination, filter artikel, perubahan heading dinamis, dan validasi perubahan daftar artikel.
+Website Discovery tahap pertama telah diimplementasikan dan diuji.
+
+Pengembangan berikutnya:
+- Memperkuat klasifikasi halaman dan validasi hasil discovery.
+- Mengembangkan Generic UAT Inspection berdasarkan komponen yang ditemukan.
+- Mengembangkan UI/UX Evaluation dengan evidence.
+- Mengembangkan inspeksi khusus seperti Article Listing hanya jika relevan.
+- Mengintegrasikan hasil discovery ke alur aplikasi dan laporan QA.
 
 Paket ini merupakan snapshot pengembangan, bukan rilis produksi.
 
-## Catatan versi
 
-Paket ini merupakan snapshot pengembangan, bukan rilis produksi.
+## Pembaruan Website Discovery
+
+2026-11-17:
+- Modul `modules/website_discovery.py` tersedia.
+- Maksimum awal 20 halaman per pemindaian.
+- Menggunakan request guard dan safety controller yang sudah tersedia.
+- Penemuan halaman internal dan deteksi komponen DOM.
+- Screenshot untuk halaman yang berhasil diperiksa.
+- Tidak melakukan interaksi yang mengubah data atau bypass mekanisme keamanan.
+- 6 test Website Discovery lulus.
+- Seluruh 67 regression test lulus.
+
+Article Listing merupakan inspeksi khusus yang kondisional, bukan persyaratan universal setiap website.
+
+Catatan keamanan:
+- Hindari mencatat exception mentah browser atau jaringan.
+- Gunakan metadata aman untuk aktivitas dan hasil proses.
+- Sensitive data filter merupakan perlindungan tambahan, bukan jaminan seluruh rahasia terdeteksi.
