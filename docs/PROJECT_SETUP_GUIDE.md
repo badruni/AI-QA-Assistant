@@ -318,3 +318,50 @@ Catatan keamanan:
 - Filter sensitive data merupakan perlindungan tambahan, bukan jaminan bahwa seluruh rahasia terdeteksi.
 
 Batas 20 halaman merupakan batas maksimum awal dan dapat dievaluasi berdasarkan kondisi website serta hasil pengujian lapangan.
+
+## 18. Generic UAT Inspection
+
+Generic UAT Inspection adalah tahap inspeksi DOM read-only setelah Website Discovery.
+
+Cakupan tahap awal:
+- Memeriksa tautan tanpa tujuan atau accessible name.
+- Memeriksa tombol tanpa accessible name.
+- Memeriksa input tanpa label yang terdeteksi.
+- Memeriksa gambar tanpa atribut alt.
+- Merangkum navigasi, formulir, kartu, tautan, tombol, input, dan gambar.
+- Menyimpan screenshot di `projects/<project_id>/evidence/screenshots`.
+
+Batasan dan keamanan:
+- Hanya halaman hasil Website Discovery dengan status `Passed` yang diperiksa.
+- Project ID hasil Discovery harus sama dengan konfigurasi proyek.
+- Request menggunakan `PlaywrightRequestGuard` dan `RequestSafetyController`.
+- Request eksternal dan redirect di luar origin proyek diblokir oleh guard.
+- Tidak ada klik tombol, pengiriman formulir, atau pembacaan nilai input.
+- Batas request per menit dan penghentian setelah batas HTTP 403 tetap berlaku.
+- Indikasi struktur/aksesibilitas menggunakan status `Needs Review`, bukan vonis bug fungsional.
+- Tahap ini belum membuktikan alur bisnis atau perilaku interaktif.
+- Jika Website Discovery berstatus `Access Restricted`, Generic UAT tidak dijalankan.
+- Accessible name tautan memperhitungkan teks alternatif gambar di dalam tautan.
+- Input bertipe button, submit, reset, dan image tidak dihitung sebagai field yang membutuhkan label.
+- Pemeriksaan accessible name/label merupakan heuristik awal, bukan implementasi penuh perhitungan nama aksesibel WCAG.
+
+Menu aplikasi:
+- Pilihan 5: Generic UAT Inspection.
+- Pilihan 6: Keluar.
+
+
+## Authentication Discovery
+
+2026-11-17:
+- Menambahkan deteksi indikasi autentikasi secara read-only.
+- Pemeriksaan hanya dilakukan pada halaman Website Discovery berstatus PASSED.
+- Sinyal yang diamati meliputi password field, OTP hints, pola form login,
+  petunjuk social login, SSO, teks login, dan URL autentikasi.
+- Tidak mengisi field, mencoba kredensial, klik tombol login, atau submit form.
+- Tidak membaca nilai input, password, token, cookie, maupun session.
+- `LOGIN_DETECTED` berarti ada indikasi pada DOM yang diamati, bukan verifikasi
+  bahwa seluruh mekanisme autentikasi telah ditemukan.
+- `NO_LOGIN_DETECTED` ber-confidence LOW dan bukan bukti bahwa website tidak
+  memiliki halaman/member authentication.
+- Jika tidak ada halaman yang dapat diperiksa atau akses dibatasi, hasilnya
+  `NEEDS_REVIEW` atau `ACCESS_RESTRICTED`.

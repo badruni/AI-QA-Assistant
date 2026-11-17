@@ -101,3 +101,29 @@ Catatan keamanan:
 - Hindari mencatat exception mentah browser atau jaringan.
 - Gunakan metadata aman untuk aktivitas dan hasil proses.
 - Sensitive data filter merupakan perlindungan tambahan, bukan jaminan seluruh rahasia terdeteksi.
+
+## Generic UAT Inspection
+
+Generic UAT merupakan tahap inspeksi DOM read-only setelah Website Discovery.
+Modul baru berada di `modules/generic_uat_inspection.py` dan test-nya berada
+di `tests/test_generic_uat_inspection.py`.
+
+Tidak ada aksi klik atau submit formulir. Screenshot disimpan di folder evidence
+masing-masing proyek. Seluruh request tetap menggunakan request guard dan
+safety controller yang sudah ada. Temuan awal dicatat sebagai `Needs Review`
+dan perlu validasi lanjutan sebelum disebut bug. Jika Website Discovery berstatus
+`Access Restricted`, tahap Generic UAT dilewati. Heuristik accessible name/label
+bersifat awal dan bukan implementasi penuh perhitungan nama aksesibel WCAG.
+
+
+## Authentication Discovery
+
+2026-11-17:
+- Modul `modules/authentication_discovery.py` menambahkan deteksi indikasi login
+  secara read-only.
+- Pemeriksaan tidak melakukan login, mengisi kredensial, klik, atau submit.
+- Nilai password, OTP, token, cookie, dan session tidak dibaca atau disimpan.
+- `NO_LOGIN_DETECTED` memiliki confidence LOW dan tidak membuktikan ketiadaan
+  fitur autentikasi.
+- Jalankan regression test dengan:
+  `.\.venv-scanner\Scripts\python.exe -m unittest tests.test_authentication_discovery -v`

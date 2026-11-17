@@ -1,6 +1,8 @@
-﻿
+
 import json
 from pathlib import Path
+
+from core.result_status import ResultStatus
 
 from core.logger import (
     log_info,
@@ -19,6 +21,9 @@ from modules.frontend_scanner import (
     load_scanner_config,
     inspect_homepage
 )
+from modules.website_discovery import discover_website
+from modules.generic_uat_inspection import inspect_generic_uat
+from modules.authentication_discovery import inspect_authentication
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATE = ROOT / "config" / "project_template.json"
@@ -32,7 +37,9 @@ def show_menu(active_project_id=None):
     print("2. Tampilkan struktur proyek")
     print("3. Kelola proyek klien")
     print("4. Jalankan Frontend Homepage Scanner")
-    print("5. Keluar")
+    print("5. Jalankan Generic UAT Inspection")
+    print("6. Jalankan Authentication Discovery")
+    print("7. Keluar")
 
     if active_project_id:
         print(f"\nProyek aktif: {active_project_id}")
@@ -346,6 +353,177 @@ def run_frontend_homepage_scanner(active_project_id):
     return active_project_id
 
 
+
+def run_authentication_discovery(active_project_id):
+    print("\n================================")
+    print("       AUTHENTICATION DISCOVERY")
+    print("================================")
+
+    if not active_project_id:
+        print("\nBelum ada proyek aktif.")
+        active_project_id = select_active_project()
+        if not active_project_id:
+            print("\nAuthentication Discovery tidak dijalankan.")
+            return None
+
+    try:
+        config = load_scanner_config(active_project_id)
+        print("\nTahap 1/2: Website Discovery...")
+        discovery = discover_website(config)
+        print("Discovery status:", discovery.status.value)
+        print("Halaman ditemukan:", len(discovery.pages))
+
+        if discovery.status == ResultStatus.ACCESS_RESTRICTED:
+            print("\nAuthentication Discovery dihentikan karena akses dibatasi.")
+            log_warning(
+                "Authentication Discovery",
+                "Tahap dilewati karena Website Discovery berstatus Access Restricted."
+            )
+            return active_project_id
+
+        print("\nTahap 2/2: Deteksi indikasi autentikasi (read-only)...")
+        result = inspect_authentication(config, discovery)
+        print("\n================================")
+        print("       HASIL AUTHENTICATION DISCOVERY")
+        print("================================")
+        print("Project ID    :", result.project_id)
+        print("Status        :", result.status.value)
+        print("Klasifikasi   :", result.classification)
+        print("Confidence    :", result.confidence)
+        print("Halaman       :", len(result.pages))
+        print("Selesai       :", result.completed)
+        print("Pesan         :", result.message)
+
+        for item in result.pages:
+            print("\n- URL:", item.page_url)
+            print("  HTTP:", item.http_status or "(tidak tersedia)")
+            print("  Status:", item.status.value)
+            if item.signals:
+                print("  Indikasi:", item.signals)
+            print("  Catatan:", item.message)
+
+        log_info(
+            "Authentication Discovery",
+            (
+                f"Project ID: {active_project_id}, "
+                f"Classification: {result.classification}, "
+                f"Status: {result.status.value}, Pages: {len(result.pages)}"
+            )
+        )
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as error:
+        print("\n[ERROR] Authentication Discovery tidak dapat dijalankan.")
+        print("Detail:", error)
+        log_warning(
+            "Authentication Discovery",
+            "Konfigurasi proyek tidak memenuhi persyaratan."
+        )
+    except Exception as error:
+        print("\n[ERROR] Terjadi kendala saat Authentication Discovery.")
+        print("Detail error dapat diperiksa di folder logs.")
+        log_exception(
+            "Authentication Discovery",
+            error,
+            "Pemeriksaan indikasi autentikasi mengalami kendala."
+        )
+
+    return active_project_id
+def run_generic_uat_inspection(active_project_id):
+    print("\n================================")
+    print("       GENERIC UAT INSPECTION")
+    print("================================")
+
+    if not active_project_id:
+        print("\nBelum ada proyek aktif.")
+        print("Silakan pilih proyek yang akan diperiksa.")
+        active_project_id = select_active_project()
+        if not active_project_id:
+            print("\nGeneric UAT tidak dijalankan.")
+            return None
+
+    try:
+        config = load_scanner_config(active_project_id)
+
+        print("\nTahap 1/2: Website Discovery...")
+        discovery = discover_website(config)
+        print("Discovery status:", discovery.status.value)
+        print("Halaman ditemukan:", len(discovery.pages))
+
+        if discovery.status == ResultStatus.ACCESS_RESTRICTED:
+            print("\nGeneric UAT dihentikan karena Website Discovery mendeteksi pembatasan akses.")
+            log_warning(
+                "Generic UAT Inspection",
+                "Tahap dilewati karena Website Discovery berstatus Access Restricted."
+            )
+            return active_project_id
+
+        if not discovery.pages:
+            print("Tidak ada halaman yang dapat diproses.")
+            return active_project_id
+
+        print("\nTahap 2/2: Generic UAT DOM Inspection...")
+        result = inspect_generic_uat(config, discovery)
+
+        print("\n================================")
+        print("       HASIL GENERIC UAT")
+        print("================================")
+        print("Project ID :", result.project_id)
+        print("Status     :", result.status.value)
+        print("Halaman    :", len(result.pages))
+        print("Temuan     :", len(result.findings))
+        print("Selesai    :", result.completed)
+        print("Pesan      :", result.message)
+
+        for page_result in result.pages:
+            print("\n- URL:", page_result.page_url)
+            print("  HTTP:", page_result.http_status or "(tidak tersedia)")
+            print("  Status:", page_result.status.value)
+            print("  Komponen:", page_result.component_summary)
+            if page_result.screenshot_path:
+                print("  Evidence:", page_result.screenshot_path)
+
+        if result.findings:
+            print("\nINDIKASI UNTUK DITINJAU")
+            for number, finding in enumerate(result.findings, start=1):
+                print(f"{number}. [{finding.category}] {finding.element}")
+                print("   URL   :", finding.page_url)
+                print("   Detail:", finding.issue)
+                print("   Status:", finding.status.value)
+
+        log_info(
+            "Generic UAT Inspection",
+            (
+                f"Inspeksi selesai. Project ID: {active_project_id}, "
+                f"Status: {result.status.value}, "
+                f"Halaman: {len(result.pages)}, "
+                f"Temuan: {len(result.findings)}"
+            )
+        )
+
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as error:
+        print("\n[ERROR] Generic UAT tidak dapat dijalankan.")
+        print("Detail:", error)
+        log_warning(
+            "Generic UAT Inspection",
+            "Konfigurasi proyek tidak memenuhi persyaratan inspeksi."
+        )
+    except Exception as error:
+        print("\n[ERROR] Terjadi kesalahan saat Generic UAT.")
+        print("Detail error dapat diperiksa di folder logs.")
+        log_error(
+            activity="Generic UAT Inspection",
+            explanation="Inspeksi DOM mengalami kegagalan.",
+            causes=[
+                "Browser atau scanner mengalami kendala.",
+                "Konfigurasi atau lingkungan aplikasi bermasalah."
+            ],
+            actions=[
+                "Periksa folder logs.",
+                "Pastikan instalasi Playwright dan Chromium tersedia."
+            ]
+        )
+
+    return active_project_id
+
 def project_manager_menu(active_project_id):
     while True:
         print("\n================================")
@@ -426,6 +604,14 @@ def main():
                 )
             
             elif choice == "5":
+                active_project_id = run_generic_uat_inspection(
+                    active_project_id
+                )
+
+            elif choice == "6":
+                active_project_id = run_authentication_discovery(active_project_id)
+
+            elif choice == "7":
                 log_info(
                     "Menutup aplikasi",
                     "Pengguna menutup AI QA Assistant secara normal."
