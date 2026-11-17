@@ -56,6 +56,36 @@ function Get-BackupPaths {
         } | ForEach-Object { $_.Name }
 }
 
+function Invoke-PushPendingCommits {
+    Write-Section "PUSH COMMIT KE GITHUB"
+
+    $upstream = & git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $upstream) {
+        Write-Host "Branch belum memiliki upstream. Push dihentikan; atur upstream secara manual terlebih dahulu." -ForegroundColor Yellow
+        return
+    }
+
+    $aheadCount = & git rev-list --count "$($upstream.Trim())..HEAD"
+    if ($LASTEXITCODE -ne 0) { throw "Gagal memeriksa jumlah commit yang belum di-push." }
+    $aheadCount = [int]$aheadCount
+
+    if ($aheadCount -le 0) {
+        Write-Host "Tidak ada commit lokal yang tertinggal dari remote. Branch sudah sinkron." -ForegroundColor Green
+        return
+    }
+
+    Write-Host "Upstream : $($upstream.Trim())"
+    Write-Host "Commit yang belum di-push: $aheadCount" -ForegroundColor Yellow
+    Invoke-Git -GitArgs @("log", "--oneline", "$($upstream.Trim())..HEAD") | Out-Null
+    $confirmation = Read-Host "Push $aheadCount commit ke upstream sekarang? (Y/N)"
+    if ($confirmation -in @("Y", "y")) {
+        Invoke-Git -GitArgs @("push") | Out-Null
+        Write-Host "Push berhasil." -ForegroundColor Green
+    } else {
+        Write-Host "Push dilewati. Commit tetap tersimpan lokal." -ForegroundColor Yellow
+    }
+}
+
 function Invoke-Backup {
     param([switch]$PushAfterCommit)
     Write-Section "BACKUP KODE KE GIT"
@@ -67,7 +97,11 @@ function Invoke-Backup {
 
     $status = & git status --porcelain
     if (-not $status) {
-        Write-Host "Tidak ada perubahan untuk di-backup." -ForegroundColor Yellow
+        Write-Host "Tidak ada perubahan baru untuk di-commit." -ForegroundColor Yellow
+        if ($PushAfterCommit) {
+            # Tetap periksa commit lokal yang mungkin belum dikirim ke remote.
+            Invoke-PushPendingCommits
+        }
         return
     }
 
@@ -95,17 +129,7 @@ function Invoke-Backup {
     Write-Host "Backup commit berhasil dibuat." -ForegroundColor Green
 
     if ($PushAfterCommit) {
-        $branch = (& git branch --show-current).Trim()
-        $upstream = & git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $upstream) {
-            throw "Branch belum memiliki upstream. Push otomatis dihentikan; atur upstream secara manual terlebih dahulu."
-        }
-        Write-Host "Tujuan push: $upstream"
-        $confirmation = Read-Host "Push commit ke GitHub sekarang? (Y/N)"
-        if ($confirmation -in @("Y", "y")) {
-            Invoke-Git -GitArgs @("push", "origin", $branch) | Out-Null
-            Write-Host "Push berhasil." -ForegroundColor Green
-        } else { Write-Host "Commit tersimpan lokal. Push dilewati." }
+        Invoke-PushPendingCommits
     }
 }
 
