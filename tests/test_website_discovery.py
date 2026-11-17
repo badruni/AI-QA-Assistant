@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from modules.frontend_scanner import ScannerConfig
-from modules.website_discovery import discover_website
+from modules.website_discovery import discover_website, _classify_page
 from core.result_status import ResultStatus
 
 
@@ -107,6 +107,54 @@ class TestWebsiteDiscovery(unittest.TestCase):
         result = discover_website(config)
         self.assertEqual(result.pages[0].status, ResultStatus.FAILED)
         self.assertEqual(result.status, ResultStatus.NEEDS_REVIEW)
+
+
+class TestPageClassification(unittest.TestCase):
+    def test_homepage(self):
+        self.assertEqual(
+            _classify_page("https://example.com/", {}),
+            "homepage",
+        )
+
+    def test_product_tokens(self):
+        for path in ("/product/123", "/products", "/produk/sepatu", "/items/123"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    _classify_page("https://example.com" + path, {}),
+                    "product",
+                )
+
+    def test_product_substring_is_not_enough(self):
+        self.assertEqual(
+            _classify_page("https://example.com/productivity", {}),
+            "unknown",
+        )
+
+    def test_article_tokens(self):
+        for path in ("/article/123", "/articles", "/artikel", "/blog", "/news", "/berita"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    _classify_page("https://example.com" + path, {}),
+                    "article",
+                )
+
+    def test_article_substring_is_not_enough(self):
+        self.assertEqual(
+            _classify_page("https://example.com/newsroom", {}),
+            "unknown",
+        )
+
+    def test_form_classification_uses_dom_evidence(self):
+        self.assertEqual(
+            _classify_page("https://example.com/contact", {"forms": 1}),
+            "form",
+        )
+
+    def test_listing_classification_uses_card_evidence(self):
+        self.assertEqual(
+            _classify_page("https://example.com/catalog", {"card_candidates": 2}),
+            "listing",
+        )
 
 
 if __name__ == "__main__":

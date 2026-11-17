@@ -64,10 +64,10 @@ Data klien, log, laporan, evidence, backup, serta virtual environment tidak dise
 - WAF Detection: selesai dan diuji dengan simulasi lokal.
 - Broken Images: selesai diimplementasikan; 3 test lulus.
 - Broken Links Inspection: selesai diimplementasikan; 8 test lulus menggunakan server lokal.
-- Regression test terbaru: 67 test lulus, 0 gagal.
+- Regression test terbaru: 74 test lulus, 0 gagal.
 - Homepage Inspection: 7 test lulus.
 - HTTP Response Details: status code, status text, dan preview response body hingga 500 karakter.
-- Website Discovery: selesai diimplementasikan; 6 test lulus.
+- Website Discovery: selesai diimplementasikan; 13 test lulus.
 
 ## Checkpoint lanjutan
 
@@ -92,8 +92,8 @@ Paket ini merupakan snapshot pengembangan, bukan rilis produksi.
 - Penemuan halaman internal dan deteksi komponen DOM.
 - Screenshot untuk halaman yang berhasil diperiksa.
 - Tidak melakukan interaksi yang mengubah data atau bypass mekanisme keamanan.
-- 6 test Website Discovery lulus.
-- Seluruh 67 regression test lulus.
+- 13 test Website Discovery lulus.
+- Seluruh 74 regression test lulus.
 
 Article Listing merupakan inspeksi khusus yang kondisional, bukan persyaratan universal setiap website.
 

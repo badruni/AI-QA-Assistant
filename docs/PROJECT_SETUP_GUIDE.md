@@ -309,8 +309,8 @@ Pembaruan 2026-11-17:
 - Tidak mengirim formulir atau menekan tombol yang dapat mengubah data.
 - Tidak melakukan bypass CAPTCHA, Cloudflare, WAF, atau mekanisme keamanan lainnya.
 - Akses terbatas dan kendala teknis tidak otomatis dianggap sebagai bug website.
-- Menambahkan 6 test Website Discovery menggunakan server lokal.
-- Memverifikasi seluruh 67 regression test berhasil; 0 gagal.
+- Menambahkan 13 test Website Discovery menggunakan server lokal.
+- Memverifikasi seluruh 74 regression test berhasil; 0 gagal.
 
 Catatan keamanan:
 - Hindari mencatat exception mentah browser atau jaringan ke log.

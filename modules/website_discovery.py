@@ -77,17 +77,33 @@ def _inspect_components(page):
 
 
 def _classify_page(url, components):
-    path = urlsplit(url).path.strip("/").casefold()
-    if not path:
+    """Klasifikasi konservatif berdasarkan token URL dan komponen DOM."""
+    import re
+
+    path = urlsplit(url).path.casefold()
+    tokens = set(re.findall(r"[a-z0-9]+", path))
+
+    if not tokens:
         return "homepage"
-    if any(word in path for word in ("product", "produk", "item")):
+
+    product_tokens = {"product", "products", "produk", "item", "items"}
+    article_tokens = {
+        "article", "articles", "artikel", "blog",
+        "news", "berita",
+    }
+
+    if tokens & product_tokens:
         return "product"
-    if any(word in path for word in ("article", "artikel", "blog", "news", "berita")):
+
+    if tokens & article_tokens:
         return "article"
+
     if components.get("forms", 0):
         return "form"
+
     if components.get("card_candidates", 0) >= 2:
         return "listing"
+
     return "unknown"
 
 
