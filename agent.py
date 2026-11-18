@@ -1,8 +1,17 @@
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 from core.result_status import ResultStatus
+from core.report_manager import save_inspection_report
+from core.evidence_manager import verify_evidence
+from core.evidence_viewer import (
+    list_project_evidence,
+    get_evidence_details,
+    resolve_evidence_path,
+)
 
 from core.logger import (
     log_info,
@@ -25,6 +34,10 @@ from modules.website_discovery import discover_website
 from modules.generic_uat_inspection import inspect_generic_uat
 from modules.authentication_discovery import inspect_authentication
 
+from modules.documentation_generator import generate_document_draft
+from core.document_viewer import open_document_viewer
+from core.docx_renderer import render_approved_docx
+
 ROOT = Path(__file__).resolve().parent
 TEMPLATE = ROOT / "config" / "project_template.json"
 
@@ -39,7 +52,9 @@ def show_menu(active_project_id=None):
     print("4. Jalankan Frontend Homepage Scanner")
     print("5. Jalankan Generic UAT Inspection")
     print("6. Jalankan Authentication Discovery")
-    print("7. Keluar")
+    print("7. Documentation Generator")
+    print("8. Evidence Viewer")
+    print("9. Keluar")
 
     if active_project_id:
         print(f"\nProyek aktif: {active_project_id}")
@@ -383,6 +398,17 @@ def run_authentication_discovery(active_project_id):
 
         print("\nTahap 2/2: Deteksi indikasi autentikasi (read-only)...")
         result = inspect_authentication(config, discovery)
+        try:
+            report_path = save_inspection_report(
+                active_project_id, "authentication_discovery", result
+            )
+            print("Laporan JSON :", report_path)
+        except Exception as report_error:
+            print("[WARNING] Laporan Authentication Discovery gagal disimpan. Hasil inspeksi tetap tersedia.")
+            log_warning(
+                "Authentication Discovery",
+                "Hasil inspeksi tersedia, tetapi laporan JSON gagal disimpan."
+            )
         print("\n================================")
         print("       HASIL AUTHENTICATION DISCOVERY")
         print("================================")
@@ -462,6 +488,17 @@ def run_generic_uat_inspection(active_project_id):
 
         print("\nTahap 2/2: Generic UAT DOM Inspection...")
         result = inspect_generic_uat(config, discovery)
+        try:
+            report_path = save_inspection_report(
+                active_project_id, "generic_uat", result
+            )
+            print("Laporan JSON :", report_path)
+        except Exception as report_error:
+            print("[WARNING] Laporan Generic UAT gagal disimpan. Hasil inspeksi tetap tersedia.")
+            log_warning(
+                "Generic UAT Inspection",
+                "Hasil inspeksi tersedia, tetapi laporan JSON gagal disimpan."
+            )
 
         print("\n================================")
         print("       HASIL GENERIC UAT")
@@ -574,6 +611,176 @@ def project_manager_menu(active_project_id):
             )
 
 
+def open_screenshot_file(screenshot_path):
+    """Open a screenshot with the Windows default app, falling back to Explorer."""
+    start_file = getattr(os, "startfile", None)
+    if start_file is None:
+        raise OSError("Membuka file otomatis hanya didukung pada Windows.")
+    try:
+        start_file(str(screenshot_path))
+    except OSError as exc:
+        # Windows modern can have a working AppX default association even when
+        # os.startfile raises WinError 1155. Explorer honors that association.
+        if getattr(exc, "winerror", None) != 1155:
+            raise
+        subprocess.Popen(["explorer.exe", str(screenshot_path)])
+
+
+def run_evidence_viewer(active_project_id):
+    """Interactive, read-only evidence viewer for the active project."""
+    print("\n================================")
+    print("          EVIDENCE VIEWER")
+    print("================================")
+
+    if not active_project_id:
+        print("\nBelum ada proyek aktif.")
+        print("Silakan pilih proyek yang evidence-nya ingin dilihat.")
+        active_project_id = select_active_project()
+        if not active_project_id:
+            print("\nEvidence Viewer tidak dijalankan.")
+            return None
+
+    while True:
+        print("\n--- EVIDENCE VIEWER ---")
+        print("Project ID:", active_project_id)
+        print("1. Daftar evidence")
+        print("2. Detail evidence")
+        print("3. Buka screenshot")
+        print("4. Verifikasi integritas evidence")
+        print("5. Kembali ke menu utama")
+        choice = input("\nPilih menu: ").strip()
+
+        if choice == "1":
+            records = list_project_evidence(active_project_id)
+            if not records:
+                print("\nBelum ada evidence terdaftar untuk proyek ini.")
+                continue
+            print("\nDAFTAR EVIDENCE")
+            for index, record in enumerate(records, start=1):
+                print(
+                    f"{index}. [{record.get('evidence_type', '-')}] "
+                    f"{record.get('title') or '(tanpa judul)'}"
+                )
+                print("   ID     :", record.get("evidence_id", "-"))
+                print("   Source :", record.get("source", "-"))
+                print("   File   :", record.get("file_path", "-"))
+
+        elif choice == "2":
+            evidence_id = input("Evidence ID: ").strip()
+            record = get_evidence_details(active_project_id, evidence_id)
+            print("\nDETAIL EVIDENCE")
+            for field in (
+                "evidence_id", "project_id", "evidence_type", "source",
+                "title", "page_url", "file_path", "file_size", "sha256",
+                "created_at", "related_finding_ids", "metadata",
+            ):
+                print(f"{field:20}: {record.get(field)}")
+
+        elif choice == "3":
+            evidence_id = input("Evidence ID screenshot: ").strip()
+            record = get_evidence_details(active_project_id, evidence_id)
+            if record.get("evidence_type") != "screenshot":
+                print("Evidence yang dipilih bukan screenshot.")
+                continue
+            screenshot_path = resolve_evidence_path(active_project_id, evidence_id)
+            try:
+                open_screenshot_file(screenshot_path)
+            except OSError as exc:
+                print(f"Gagal membuka screenshot: {exc}")
+                continue
+            print("Permintaan membuka screenshot dikirim ke Windows:", screenshot_path)
+
+        elif choice == "4":
+            evidence_id = input("Evidence ID yang diverifikasi: ").strip()
+            if verify_evidence(active_project_id, evidence_id):
+                print("Hasil verifikasi: VALID (SHA-256 cocok).")
+            else:
+                print("Hasil verifikasi: TIDAK VALID (file hilang atau hash berbeda).")
+
+        elif choice == "5":
+            break
+        else:
+            print("Pilihan tidak valid.")
+
+    return active_project_id
+
+
+def run_documentation_generator(active_project_id):
+    """Create/review/preview/export project documentation drafts."""
+    from modules.documentation_generator import generate_document_draft, list_project_document_drafts
+    from core.document_viewer import open_document_viewer
+    from core.docx_renderer import render_approved_docx
+    from core.document_manager import approve_document, get_document
+
+    if not active_project_id:
+        print("\nBelum ada proyek aktif.")
+        active_project_id = select_active_project()
+        if not active_project_id:
+            print("Documentation Generator tidak dijalankan.")
+            return None
+
+    while True:
+        print("\n--- DOCUMENTATION GENERATOR ---")
+        print("Project ID:", active_project_id)
+        print("1. Buat draft UAT")
+        print("2. Buat draft User Guide Web")
+        print("3. Buat draft User Guide CMS")
+        print("4. Daftar dan review dokumen")
+        print("5. Kembali")
+        choice = input("Pilih menu: ").strip()
+        if choice == "5":
+            break
+        if choice in ("1", "2", "3"):
+            doc_type = {"1": "UAT", "2": "User_Guide_Web", "3": "User_Guide_CMS"}[choice]
+            try:
+                record = generate_document_draft(active_project_id, doc_type)
+                manifest, version = record["manifest"], record["version"]
+                doc_id = manifest["document_id"]
+                print("\nDraft dibuat:", doc_id)
+                print("Status:", version["status"])
+                print("Bagian perlu ditinjau:", len(version.get("unverified_sections", [])))
+                if version.get("unverified_sections"):
+                    for item in version["unverified_sections"]:
+                        print("-", item)
+                if input("Buka A4 Print Preview? (y/n): ").strip().lower() == "y":
+                    open_document_viewer(active_project_id, doc_id)
+                print("DOCX final belum dibuat. Persetujuan hanya tersedia setelah seluruh bagian diverifikasi.")
+            except Exception as error:
+                print("\n[INFO] Draft tidak dapat dibuat:", error)
+        elif choice == "4":
+            docs = list_project_document_drafts(active_project_id)
+            if not docs:
+                print("Belum ada dokumen.")
+                continue
+            for index, item in enumerate(docs, 1):
+                print(f"{index}. [{item['status']}] {item['document_type']} - {item['title']}")
+                print("   ID:", item["document_id"], "| Versi:", item["current_version"])
+            selected = input("Masukkan nomor dokumen (kosong untuk kembali): ").strip()
+            if not selected:
+                continue
+            try:
+                number = int(selected)
+                item = docs[number - 1]
+                doc_id = item["document_id"]
+                action = input("Aksi: [1] Preview [2] Approve [3] Export DOCX [Enter] kembali: ").strip()
+                if action == "1":
+                    open_document_viewer(active_project_id, doc_id)
+                elif action == "2":
+                    current = get_document(active_project_id, doc_id)["version"]
+                    if current.get("unverified_sections"):
+                        print("Persetujuan ditolak: masih ada bagian yang belum diverifikasi.")
+                    elif input("Konfirmasi: Anda telah memeriksa isi dan evidence? (y/n): ").strip().lower() == "y":
+                        approved = approve_document(active_project_id, doc_id)
+                        print("Versi disetujui:", approved["version"].get("status"))
+                elif action == "3":
+                    output = render_approved_docx(active_project_id, doc_id)
+                    print("DOCX dibuat:", output)
+            except (ValueError, IndexError, OSError, RuntimeError) as error:
+                print("[INFO] Aksi dokumen tidak dapat diselesaikan:", error)
+        else:
+            print("Pilihan tidak valid.")
+    return active_project_id
+
 def main():
     active_project_id = None
 
@@ -612,6 +819,12 @@ def main():
                 active_project_id = run_authentication_discovery(active_project_id)
 
             elif choice == "7":
+                active_project_id = run_documentation_generator(active_project_id)
+
+            elif choice == "8":
+                active_project_id = run_evidence_viewer(active_project_id)
+
+            elif choice == "9":
                 log_info(
                     "Menutup aplikasi",
                     "Pengguna menutup AI QA Assistant secara normal."

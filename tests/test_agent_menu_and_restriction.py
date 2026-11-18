@@ -16,8 +16,9 @@ class AgentMenuIntegrationTests(unittest.TestCase):
 
         menu = output.getvalue()
         self.assertIn("6. Jalankan Authentication Discovery", menu)
-        self.assertIn("7. Keluar", menu)
-        self.assertNotIn("6. Keluar", menu)
+        self.assertIn("8. Evidence Viewer", menu)
+        self.assertIn("9. Keluar", menu)
+        self.assertNotIn("7. Keluar", menu)
 
 
 class GenericUATRestrictedIntegrationTests(unittest.TestCase):

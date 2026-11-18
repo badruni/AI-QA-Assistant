@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from playwright.sync_api import (
 from core.playwright_request_guard import PlaywrightRequestGuard
 from core.request_safety import RequestSafetyController
 from core.result_status import ResultStatus
+from core.evidence_manager import register_evidence
 
 
 @dataclass(frozen=True)
@@ -152,6 +154,27 @@ def _inspect_dom(page):
     }""") 
 
 
+def _register_screenshot_evidence(
+    project_id, screenshot_path, page_url, title, metadata=None,
+):
+    try:
+        register_evidence(
+            project_id=project_id,
+            file_path=screenshot_path,
+            evidence_type="screenshot",
+            source="generic_uat_inspection",
+            page_url=page_url,
+            title=title or "",
+            metadata=metadata or {},
+        )
+        return True
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Screenshot evidence registration failed; inspection continues."
+        )
+        return False
+
+
 def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
     """Inspeksi DOM read-only pada halaman PASSED dari Website Discovery."""
     if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int):
@@ -280,6 +303,14 @@ def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
                             )
                         except PlaywrightError:
                             screenshot_path = None
+                        if screenshot_path is not None:
+                            _register_screenshot_evidence(
+                                config.project_id,
+                                screenshot_path,
+                                discovered.url,
+                                discovered.title,
+                                {"inspection": "generic_uat"},
+                            )
 
                 except PlaywrightTimeoutError:
                     status = ResultStatus.TIMEOUT

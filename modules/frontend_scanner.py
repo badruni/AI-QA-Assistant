@@ -1,4 +1,5 @@
-﻿from dataclasses import dataclass
+﻿import logging
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -20,9 +21,32 @@ from core.request_safety import (
     RequestSafetyStop,
 )
 from core.result_status import ResultStatus
+from core.evidence_manager import register_evidence
 
 ROOT = Path(__file__).resolve().parent.parent
 PROJECTS_DIR = ROOT / "projects"
+
+
+def _register_screenshot_evidence(
+    project_id, screenshot_path, page_url, title, metadata=None,
+):
+    """Register a created screenshot; registry failure must not fail inspection."""
+    try:
+        register_evidence(
+            project_id=project_id,
+            file_path=screenshot_path,
+            evidence_type="screenshot",
+            source="frontend_scanner",
+            page_url=page_url,
+            title=title or "",
+            metadata=metadata or {},
+        )
+        return True
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Screenshot evidence registration failed; inspection continues."
+        )
+        return False
 
 
 def _looks_like_waf_block_page(page_title, page_text):
@@ -502,6 +526,13 @@ def inspect_homepage(config, timeout_ms=30000):
 
                     if screenshot_file.is_file():
                         screenshot_path = screenshot_file
+                        _register_screenshot_evidence(
+                            config.project_id,
+                            screenshot_path,
+                            final_url,
+                            page_title,
+                            {"inspection": "frontend_homepage"},
+                        )
 
                 except PlaywrightError:
                     screenshot_path = None

@@ -124,6 +124,12 @@ Buat ulang environment dan instal ulang dependensi pada laptop tujuan.
 Pasang Chromium melalui perintah Playwright setelah instalasi paket.
 
 Periksa kebijakan perusahaan sebelum memindahkan data client, laporan, screenshot, atau evidence.
+### Pengelolaan batch script
+
+- Simpan seluruh batch script pengembangan dan perbaikan di folder `batch_scripts\`, bukan di root repository.
+- Jalankan batch script dari root repository agar path relatif tetap sesuai.
+- Simpan backup dan arsip di folder `backups\`.
+- Jangan menghapus batch script lama atau arsip sumber sebelum memastikan penggantinya tersedia dan terverifikasi.
 
 ## 8. Status proyek
 - Fondasi aplikasi: implemented
@@ -365,3 +371,104 @@ Menu aplikasi:
   memiliki halaman/member authentication.
 - Jika tidak ada halaman yang dapat diperiksa atau akses dibatasi, hasilnya
   `NEEDS_REVIEW` atau `ACCESS_RESTRICTED`.
+
+
+## Penyimpanan Laporan Inspeksi JSON
+
+Hasil Generic UAT Inspection dan Authentication Discovery disimpan otomatis
+sebagai file JSON terpisah di `projects/<PROJECT_ID>/reports/`. Setiap eksekusi
+menghasilkan nama file unik sehingga laporan sebelumnya tidak ditimpa.
+Laporan memuat tipe inspeksi, versi skema, waktu UTC, ID proyek, dan hasil
+terstruktur. URL pada field URL disimpan tanpa query string maupun fragment.
+Field yang namanya mengindikasikan password, token, secret, cookie, credential,
+authorization, atau API key akan disamarkan. Hanya nama metrik inspeksi yang diizinkan secara eksplisit yang dikecualikan. Screenshot tetap berada di folder
+evidence dan dirujuk dengan path relatif jika berada di dalam folder proyek.
+Jika penyimpanan laporan gagal, hasil inspeksi tetap ditampilkan dan aplikasi
+memberikan peringatan.
+
+## Evidence Management
+
+Evidence disimpan terpisah per proyek di `projects/<project_id>/evidence/`.
+Modul `core/evidence_manager.py` menyediakan registrasi metadata evidence,
+indeks `evidence_index.json`, path relatif, SHA-256, daftar evidence, dan
+verifikasi integritas file. Jenis file yang didukung saat ini adalah screenshot
+dan attachment. File harus sudah ada dan berada di dalam folder evidence proyek.
+Metadata sensitif seperti password, token, cookie, credential, authorization,
+dan API key disamarkan. Modul ini belum mengubah alur pembuatan screenshot
+Discovery maupun Generic UAT; integrasi screenshot dilakukan setelah file berhasil dibuat.
+
+## Evidence Management ? screenshot registry integration
+
+- Screenshot hasil Frontend Homepage Scanner, Website Discovery, dan Generic UAT didaftarkan ke `evidence/evidence_index.json` melalui `core/evidence_manager.py`.
+- File screenshot tetap disimpan di `evidence/screenshots/`; integrasi tidak memindahkan atau menghapus evidence yang sudah ada.
+- Registrasi dilakukan hanya setelah screenshot berhasil dibuat. Kegagalan pencatatan tidak menggagalkan proses inspeksi dan hanya menghasilkan peringatan generik tanpa detail exception.
+- Metadata menyimpan sumber inspeksi dan URL halaman yang disanitasi oleh Evidence Manager.
+
+## Evidence Viewer
+
+Evidence Viewer dapat dibuka dari menu utama aplikasi. Viewer bekerja pada proyek
+aktif; jika belum ada proyek aktif, pengguna diminta memilih proyek terlebih dahulu.
+Fitur meliputi daftar evidence, detail metadata, membuka screenshot menggunakan
+aplikasi bawaan Windows, dan verifikasi integritas SHA-256.
+
+Viewer hanya membaca indeks dan file evidence. Viewer tidak menghapus, memindahkan,
+atau mengubah evidence. Path file divalidasi agar tetap berada di dalam folder
+evidence proyek. Attachment ditampilkan sebagai metadata dan tidak dibuka otomatis.
+
+### Membuka screenshot pada Windows
+
+Evidence Viewer mencoba membuka screenshot melalui asosiasi aplikasi default Windows.
+Jika pemanggilan langsung menghasilkan WinError 1155, aplikasi meneruskan permintaan
+melalui Windows Explorer agar asosiasi aplikasi modern (misalnya Paint 3D) tetap
+digunakan. Aplikasi tidak memaksa Paint klasik dan tidak mengubah asosiasi file Windows.
+
+## Document Manager
+
+Document Manager menyimpan draft dokumen QA per proyek secara lokal di
+`projects/<PROJECT_ID>/documentation/`. Jenis dokumen yang didukung adalah
+`UAT`, `User_Guide_Web`, dan `User_Guide_CMS`.
+
+Setiap dokumen memiliki manifest dan file JSON per versi. Versi yang telah
+berstatus `APPROVED` dipertahankan; perubahan berikutnya dibuat sebagai versi
+baru setelah versi aktif disetujui. Persetujuan dilakukan secara eksplisit
+melalui fungsi `approve_document()` dan ditolak jika masih ada bagian yang
+belum diverifikasi atau dokumen berstatus `BLOCKED`.
+
+Document Manager pada tahap ini hanya mengelola konten JSON, metadata, status,
+dan versi. Pembuatan DOCX, Print Preview Viewer, serta status dokumen final
+akan ditambahkan pada tahap implementasi berikutnya. Informasi sensitif pada
+key seperti password, token, cookie, dan credential disimpan sebagai
+`[REDACTED]`; query dan fragment URL dihilangkan.
+
+## Document Content Model
+
+`core/document_content_model.py` menyediakan struktur konten dokumen yang
+independen dari renderer. Model ini digunakan sebagai sumber data semantik
+untuk Print Preview Viewer dan DOCX Renderer pada tahap berikutnya.
+
+Jenis dokumen yang didukung: `UAT`, `User_Guide_Web`, dan `User_Guide_CMS`.
+Setiap dokumen menggunakan section dan block terstruktur: heading, paragraph,
+bullet/numbered list, table, image reference, dan page break. Pengaturan halaman
+awal menggunakan A4 dengan orientasi portrait atau landscape dan margin dalam
+milimeter.
+
+Block gambar hanya menyimpan `evidence_id`, bukan path file bebas. Renderer
+berikutnya harus menyelesaikan referensi tersebut melalui Evidence Manager dan
+memverifikasi integritas evidence sebelum menampilkan atau menyisipkannya.
+Model tidak membuat kesimpulan PASS/FAIL; status test case harus diberikan
+berdasarkan hasil inspeksi dan evidence yang tersedia.
+
+## Documentation Generator, A4 Preview, dan DOCX Renderer
+
+Menu 7 menyediakan draft UAT, User Guide Web, dan User Guide CMS berdasarkan laporan inspeksi yang tersedia. Generator tidak mengarang langkah CMS atau hasil fungsional. UAT dan User Guide Web berstatus Needs Review sampai bagian yang belum terverifikasi diselesaikan; User Guide CMS berstatus Blocked bila laporan eksplorasi CMS belum tersedia.
+
+A4 Print Preview menggunakan Tkinter dan bersifat read-only. DOCX Renderer menggunakan dependensi `python-docx` pada `.venv-scanner` dan hanya mengekspor versi berstatus APPROVED. Referensi gambar harus terdaftar di Evidence Manager dan hash SHA-256 diverifikasi sebelum dirender. File ekspor tidak menimpa DOCX versi yang sudah ada.
+
+Alur: jalankan inspeksi yang relevan -> buat draft melalui menu 7 -> tinjau A4 Preview -> selesaikan bagian yang belum diverifikasi melalui proses QA -> setujui versi -> ekspor DOCX. Draft yang masih memiliki `unverified_sections` tidak dapat disetujui. Eksplorasi CMS belum diimplementasikan pada tahap ini, sehingga User Guide CMS tetap Blocked sampai sumber tersebut tersedia.
+
+Catatan: Print Preview awal menyajikan representasi A4 berbasis halaman dan teks; kesamaan pagination/format dengan Microsoft Word belum dijamin dan harus diverifikasi secara visual pada dokumen nyata.
+## Documentation Generator — struktur template
+
+Generator membuat draft UAT, User Guide Website, dan User Guide CMS dari laporan/evidence proyek yang tersedia. Struktur UAT mengikuti bagian informasi dokumen, pendahuluan, skenario, catatan, dan persetujuan. Struktur CMS mengikuti ruang lingkup, version history, login, dashboard, serta pengelolaan menu/konten. User Guide Website memisahkan area pengunjung dan area member yang masih perlu diverifikasi.
+
+Data yang tidak tersedia ditandai sebagai belum tersedia/Belum diuji/Needs Review. Status inspeksi DOM tidak dianggap sebagai hasil uji fungsional. CMS tanpa laporan eksplorasi tetap BLOCKED. Generator tidak menjalankan submit form, transaksi, atau perubahan data.

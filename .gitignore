@@ -1,4 +1,4 @@
-﻿.venv/
+﻿﻿.venv/
 __pycache__/
 *.py[cod]
 .env
@@ -19,3 +19,9 @@ Thumbs.db
 *.log
 .env.*
 !.env.example
+# Local source-review archives and extracted snapshots (keep out of Git)
+# Local source-review archives and extracted snapshots (keep out of Git)
+/batch_scripts/documentation_generator_source_review/
+/batch_scripts/documentation_layout_source_20261118_154020/
+/batch_scripts/documentation_generator_source_review.zip
+/batch_scripts/documentation_layout_source_review.zip

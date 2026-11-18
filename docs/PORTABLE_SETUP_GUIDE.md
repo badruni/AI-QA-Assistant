@@ -1,4 +1,4 @@
-# AI QA Assistant — Portable Setup Guide
+# AI QA Assistant â€” Portable Setup Guide
 
 ## Tujuan
 Panduan untuk memindahkan dan menjalankan AI QA Assistant pada laptop lain.
@@ -53,6 +53,9 @@ Data klien, log, laporan, evidence, backup, serta virtual environment tidak dise
 - Jangan menyimpan password, token, cookie, atau kredensial dalam konfigurasi maupun log.
 - Periksa konfigurasi proyek sebelum melakukan pemindaian.
 - Gunakan hanya website yang telah mendapat izin pengujian.
+- Simpan seluruh batch script pengembangan dan perbaikan di folder `batch_scripts\`, bukan di root repository.
+- Jalankan batch script dari root repository agar path relatif tetap sesuai.
+- Simpan backup dan arsip di folder `backups\`.
 - Backup data sebelum melakukan perubahan besar.
 
 ## Status pengembangan terbaru
@@ -127,3 +130,51 @@ bersifat awal dan bukan implementasi penuh perhitungan nama aksesibel WCAG.
   fitur autentikasi.
 - Jalankan regression test dengan:
   `.\.venv-scanner\Scripts\python.exe -m unittest tests.test_authentication_discovery -v`
+
+
+## Penyimpanan Laporan Inspeksi JSON
+
+Hasil Generic UAT Inspection dan Authentication Discovery disimpan otomatis
+sebagai file JSON terpisah di `projects/<PROJECT_ID>/reports/`. Setiap eksekusi
+menghasilkan nama file unik sehingga laporan sebelumnya tidak ditimpa.
+Laporan memuat tipe inspeksi, versi skema, waktu UTC, ID proyek, dan hasil
+terstruktur. URL pada field URL disimpan tanpa query string maupun fragment.
+Field yang namanya mengindikasikan password, token, secret, cookie, credential,
+authorization, atau API key akan disamarkan. Hanya nama metrik inspeksi yang diizinkan secara eksplisit yang dikecualikan. Screenshot tetap berada di folder
+evidence dan dirujuk dengan path relatif jika berada di dalam folder proyek.
+Jika penyimpanan laporan gagal, hasil inspeksi tetap ditampilkan dan aplikasi
+memberikan peringatan.
+
+## Evidence Management
+
+Evidence Management menyimpan metadata evidence per proyek pada
+`evidence/evidence_index.json`. File evidence tetap berada di folder proyek dan
+tidak dipindahkan oleh modul registrasi. Indeks mencatat ID unik, sumber, jenis,
+waktu UTC, path relatif, ukuran file, SHA-256, URL halaman yang telah disanitasi,
+dan relasi finding bila tersedia. Jalankan pengujian dengan:
+`python -m unittest tests.test_evidence_manager -v`.
+
+## Evidence Management ? screenshot registry integration
+
+- Screenshot hasil Frontend Homepage Scanner, Website Discovery, dan Generic UAT didaftarkan ke `evidence/evidence_index.json` melalui `core/evidence_manager.py`.
+- File screenshot tetap disimpan di `evidence/screenshots/`; integrasi tidak memindahkan atau menghapus evidence yang sudah ada.
+- Registrasi dilakukan hanya setelah screenshot berhasil dibuat. Kegagalan pencatatan tidak menggagalkan proses inspeksi dan hanya menghasilkan peringatan generik tanpa detail exception.
+- Metadata menyimpan sumber inspeksi dan URL halaman yang disanitasi oleh Evidence Manager.
+
+## Evidence Viewer
+
+Evidence Viewer dapat dibuka dari menu utama aplikasi. Viewer bekerja pada proyek
+aktif; jika belum ada proyek aktif, pengguna diminta memilih proyek terlebih dahulu.
+Fitur meliputi daftar evidence, detail metadata, membuka screenshot menggunakan
+aplikasi bawaan Windows, dan verifikasi integritas SHA-256.
+
+Viewer hanya membaca indeks dan file evidence. Viewer tidak menghapus, memindahkan,
+atau mengubah evidence. Path file divalidasi agar tetap berada di dalam folder
+evidence proyek. Attachment ditampilkan sebagai metadata dan tidak dibuka otomatis.
+
+### Membuka screenshot pada Windows
+
+Evidence Viewer mencoba membuka screenshot melalui asosiasi aplikasi default Windows.
+Jika pemanggilan langsung menghasilkan WinError 1155, aplikasi meneruskan permintaan
+melalui Windows Explorer agar asosiasi aplikasi modern (misalnya Paint 3D) tetap
+digunakan. Aplikasi tidak memaksa Paint klasik dan tidak mengubah asosiasi file Windows.
