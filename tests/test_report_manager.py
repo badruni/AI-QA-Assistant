@@ -5,6 +5,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core import project_manager, report_manager
+from core.result_status import ResultStatus
+from modules.frontend_scanner import HomepageInspectionResult
 
 
 class ReportManagerTests(unittest.TestCase):
@@ -93,6 +95,29 @@ class ReportManagerTests(unittest.TestCase):
         self.assertEqual(signals["password_fields"], 1)
         self.assertEqual(signals["access_token_fields"], "[REDACTED]")
         self.assertEqual(signals["password_count"], "[REDACTED]")
+
+    def test_writes_frontend_homepage_report(self):
+        screenshot = self.project_dir / "evidence" / "screenshots" / "homepage.png"
+        result = HomepageInspectionResult(
+            project_id=self.project_id,
+            requested_url="https://example.test/?token=must-not-leak",
+            final_url="https://example.test/home?session=must-not-leak#section",
+            status=ResultStatus.PASSED,
+            http_status=200,
+            page_title="QA Test Homepage",
+            screenshot_path=screenshot,
+            message="Homepage berhasil diperiksa.",
+        )
+        path = report_manager.save_inspection_report(
+            self.project_id, "frontend_homepage", result
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["inspection_type"], "frontend_homepage")
+        self.assertEqual(payload["result"]["project_id"], self.project_id)
+        self.assertEqual(payload["result"]["requested_url"], "https://example.test/")
+        self.assertEqual(payload["result"]["final_url"], "https://example.test/home")
+        self.assertEqual(payload["result"]["screenshot_path"], "evidence/screenshots/homepage.png")
+        self.assertEqual(payload["result"]["status"], "Passed")
 
     def test_rejects_unknown_inspection_type(self):
         with self.assertRaises(ValueError):

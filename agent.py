@@ -314,6 +314,20 @@ def run_frontend_homepage_scanner(active_project_id):
         print("Project ID:", config.project_id)
 
         result = inspect_homepage(config)
+        try:
+            report_path = save_inspection_report(
+                active_project_id, "frontend_homepage", result
+            )
+            print("Laporan JSON :", report_path)
+        except Exception as report_error:
+            print(
+                "[WARNING] Laporan Frontend Homepage gagal disimpan. "
+                "Hasil inspeksi tetap tersedia."
+            )
+            log_warning(
+                "Frontend Homepage Scanner",
+                "Hasil inspeksi tersedia, tetapi laporan JSON gagal disimpan."
+            )
 
         print("\n================================")
         print("       HASIL PEMERIKSAAN")

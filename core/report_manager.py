@@ -92,7 +92,7 @@ def _to_json_safe(value, project_dir, key=None):
 def save_inspection_report(project_id, inspection_type, result):
     # Simpan hasil inspeksi ke JSON unik secara atomik.
     validate_project_id(project_id)
-    if inspection_type not in ("generic_uat", "authentication_discovery"):
+    if inspection_type not in ("generic_uat", "authentication_discovery", "frontend_homepage"):
         raise ValueError("Jenis inspeksi laporan tidak dikenal.")
     get_project(project_id)
 

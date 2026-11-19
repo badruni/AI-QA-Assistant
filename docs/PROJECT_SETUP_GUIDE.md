@@ -498,3 +498,10 @@ Hasil verifikasi 19 November 2026:
 Test skipped tidak dihitung sebagai test lulus. Test tambahan menggunakan fake clock dan mock Playwright; hasilnya memverifikasi perilaku unit/guard yang dicakup test, bukan throughput terhadap website publik. Pengujian threshold 403 dan redirect lintas origin sebelumnya menggunakan server lokal. Tidak ada dependency baru dan tidak ada commit/push pada sesi ini.
 
 Status: pengujian dan dokumentasi Feature 01 selesai pada cakupan yang diverifikasi. Perubahan belum di-commit.
+
+## Feature 02 — Frontend Homepage Report
+
+- Frontend Homepage Scanner results are saved as project-scoped JSON reports.
+- Report type: `frontend_homepage`.
+- Report-save failures are non-fatal; scanner results remain available and a warning is logged.
+- Link and image inspection reports are not included in this feature.
