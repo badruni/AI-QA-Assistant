@@ -472,3 +472,29 @@ Catatan: Print Preview awal menyajikan representasi A4 berbasis halaman dan teks
 Generator membuat draft UAT, User Guide Website, dan User Guide CMS dari laporan/evidence proyek yang tersedia. Struktur UAT mengikuti bagian informasi dokumen, pendahuluan, skenario, catatan, dan persetujuan. Struktur CMS mengikuti ruang lingkup, version history, login, dashboard, serta pengelolaan menu/konten. User Guide Website memisahkan area pengunjung dan area member yang masih perlu diverifikasi.
 
 Data yang tidak tersedia ditandai sebagai belum tersedia/Belum diuji/Needs Review. Status inspeksi DOM tidak dianggap sebagai hasil uji fungsional. CMS tanpa laporan eksplorasi tetap BLOCKED. Generator tidak menjalankan submit form, transaksi, atau perubahan data.
+## Feature 01 — Request Safety & Rate Limit (2026-11-19)
+
+Feature 01 memperkuat pengujian dan dokumentasi untuk implementasi Request Safety yang telah tersedia. Tidak ada perubahan pada kode implementasi produksi.
+
+Implementasi yang ditinjau:
+- `core/request_safety.py`: controller rolling window 60 detik dan penghentian berdasarkan jumlah HTTP 403 berturut-turut.
+- `core/playwright_request_guard.py`: pengamanan request browser, pembatasan origin, dan pencegahan mengikuti redirect 3xx.
+- `modules/frontend_scanner.py`: penggunaan controller pada alur homepage, image, dan link inspection.
+
+File tambahan:
+- `tests/test_request_safety_delivery.py`
+- `docs/FEATURE_01_REQUEST_SAFETY.md`
+- Batch script persiapan, penerapan, verifikasi, dan rollback di `batch_scripts/`.
+
+Pengujian mencakup validasi konfigurasi, rolling window, penantian slot request, kedaluwarsa timestamp secara individual, guard request browser, controller sebelum API request link, reset hitungan 403 oleh respons non-403, penghentian saat threshold tercapai, dan pencegahan request setelah controller berhenti.
+
+Hasil verifikasi 19 November 2026:
+- Python syntax check: lulus.
+- Feature 01 targeted test: 7 lulus.
+- Existing Request Safety tests: 21 lulus.
+- Full regression suite: 160 lulus, 1 skipped.
+- Tidak ada test gagal.
+
+Test skipped tidak dihitung sebagai test lulus. Test tambahan menggunakan fake clock dan mock Playwright; hasilnya memverifikasi perilaku unit/guard yang dicakup test, bukan throughput terhadap website publik. Pengujian threshold 403 dan redirect lintas origin sebelumnya menggunakan server lokal. Tidak ada dependency baru dan tidak ada commit/push pada sesi ini.
+
+Status: pengujian dan dokumentasi Feature 01 selesai pada cakupan yang diverifikasi. Perubahan belum di-commit.
