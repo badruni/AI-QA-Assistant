@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from core.result_status import ResultStatus
+from core.progress_tracking import ProgressReporter
 from modules.frontend_scanner import ScannerConfig
 from modules.generic_uat_inspection import (
     _build_findings,
@@ -60,6 +61,9 @@ class TestGenericUATIntegration(unittest.TestCase):
                 if path == "/forbidden":
                     status = 403
                     body = "<title>Forbidden</title><h1>Forbidden</h1>"
+                elif path == "/rate-limit":
+                    status = 429
+                    body = "<title>Too Many Requests</title>"
                 elif path == "/clean":
                     status = 200
                     body = (
@@ -71,6 +75,12 @@ class TestGenericUATIntegration(unittest.TestCase):
                         "<input id='email' type='email'>"
                         "<input type='button' value='Cancel'>"
                         "<input type='submit' value='Send'></form>"
+                    )
+                elif path == "/cloudflare":
+                    status = 200
+                    body = (
+                        "<title>Just a moment...</title>"
+                        "<h1>Checking your browser before accessing this site.</h1>"
                     )
                 elif path == "/pixel":
                     status = 200
@@ -164,13 +174,20 @@ class TestGenericUATIntegration(unittest.TestCase):
         )
 
     def test_inspects_dom_and_creates_screenshot(self):
-        result = inspect_generic_uat(self.config, self._discovery("/review"))
+        events = []
+        result = inspect_generic_uat(
+            self.config, self._discovery("/review"),
+            progress=ProgressReporter(events.append),
+        )
         self.assertEqual(result.status, ResultStatus.NEEDS_REVIEW)
         self.assertTrue(result.completed)
         self.assertGreaterEqual(len(result.findings), 5)
         self.assertEqual(result.pages[0].status, ResultStatus.PASSED)
         self.assertIsNotNone(result.pages[0].screenshot_path)
         self.assertTrue(result.pages[0].screenshot_path.exists())
+        terminal = [event for event in events if event.stage == "Generic UAT"][-1]
+        self.assertEqual(terminal.status, "completed")
+        self.assertEqual((terminal.current, terminal.total), (1, 1))
 
     def test_clean_page_passes_without_findings(self):
         result = inspect_generic_uat(self.config, self._discovery("/clean"))
@@ -190,10 +207,38 @@ class TestGenericUATIntegration(unittest.TestCase):
             max_requests_per_minute=10,
             stop_after_consecutive_403=1,
         )
-        result = inspect_generic_uat(config, self._discovery("/forbidden"))
+        events = []
+        result = inspect_generic_uat(
+            config, self._discovery("/forbidden"),
+            progress=ProgressReporter(events.append),
+        )
         self.assertEqual(result.status, ResultStatus.ACCESS_RESTRICTED)
         self.assertFalse(result.completed)
         self.assertIn("403", result.stopped_reason)
+        self.assertEqual(events[-1].status, "stopped")
+
+    def test_429_stops_inspection_as_access_restricted(self):
+        result = inspect_generic_uat(
+            self.config, self._discovery("/rate-limit")
+        )
+        self.assertEqual(result.status, ResultStatus.ACCESS_RESTRICTED)
+        self.assertFalse(result.completed)
+        self.assertEqual(
+            result.pages[0].access_classification.classification,
+            "HTTP_RATE_LIMITED",
+        )
+
+    def test_cloudflare_challenge_stops_uat_and_is_classified(self):
+        result = inspect_generic_uat(
+            self.config, self._discovery("/cloudflare")
+        )
+        self.assertEqual(result.status, ResultStatus.ACCESS_RESTRICTED)
+        self.assertEqual(len(result.pages), 1)
+        self.assertEqual(
+            result.pages[0].access_classification.classification,
+            "CLOUDFLARE_CHALLENGE",
+        )
+        self.assertEqual(result.findings, ())
 
     def test_skips_pages_not_passed_by_discovery(self):
         result = inspect_generic_uat(

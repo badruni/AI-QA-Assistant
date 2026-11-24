@@ -40,20 +40,39 @@ function Show-GitStatus {
 }
 
 function Get-BackupPaths {
-    $paths = @("agent.py", "core", "modules", "tests", "docs", "config", ".gitignore")
+    $paths = @(
+        "agent.py",
+        "core",
+        "modules",
+        "tests",
+        "docs",
+        "config",
+        "local_test_site",
+        ".gitignore",
+        "requirements.txt",
+        "run_ai_qa_assistant.ps1",
+        "Git_Manager.ps1"
+    )
+
     foreach ($path in $paths) {
-        if (Test-Path (Join-Path $script:RepoRoot $path)) { $path }
+        $fullPath = Join-Path $script:RepoRoot $path
+
+        if (Test-Path -LiteralPath $fullPath) {
+            $path
+        }
     }
 
-    $allowedPrefixes = @("Implement_", "Fix_", "Setup_", "Git_Manager")
-    Get-ChildItem -LiteralPath $script:RepoRoot -File -Filter "*.ps1" |
-        Where-Object {
-            $name = $_.Name
-            foreach ($prefix in $allowedPrefixes) {
-                if ($name.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
-            }
-            return $false
-        } | ForEach-Object { $_.Name }
+    # Sertakan hanya batch scripts yang sudah dilacak Git.
+    # File ZIP, patch, dan file baru tidak otomatis dimasukkan.
+    $trackedBatchScripts = @(
+        git -C $script:RepoRoot ls-files -- "batch_scripts/*"
+    )
+
+    foreach ($path in $trackedBatchScripts) {
+        if (Test-Path -LiteralPath (Join-Path $script:RepoRoot $path)) {
+            $path
+        }
+    }
 }
 
 function Invoke-PushPendingCommits {

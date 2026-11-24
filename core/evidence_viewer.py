@@ -2,7 +2,8 @@
 from pathlib import Path
 
 from core.evidence_manager import list_evidence
-from core.project_manager import PROJECTS_DIR
+from core.project_manager import PROJECTS_DIR, get_project_directory
+from core.path_safety import resolve_project_path
 
 
 def list_project_evidence(project_id):

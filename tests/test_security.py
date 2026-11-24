@@ -1,7 +1,7 @@
 
 import unittest
 
-from core.security import sanitize_text
+from core.security import sanitize_text, sanitize_url
 
 
 class TestSensitiveDataFilter(unittest.TestCase):
@@ -52,6 +52,31 @@ class TestSensitiveDataFilter(unittest.TestCase):
             "https://example.com/?token=URLTOKEN123",
             "URLTOKEN123"
         )
+
+    def test_signature_and_signed_url_parameter_variants(self):
+        for key in (
+            "sig", "signature", "X-Amz-Signature", "api-key",
+            "client_secret", "access_token", "credential",
+        ):
+            with self.subTest(key=key):
+                self.assert_secret_hidden(
+                    f"https://example.test/path?lang=id&{key}=SYNTHETIC_SECRET_2026",
+                    "SYNTHETIC_SECRET_2026",
+                )
+
+    def test_safe_url_redacts_secret_values_and_keeps_ordinary_query(self):
+        value = (
+            "https://example.test/path?lang=id&page=2&token=SYNTHETIC_SECRET_2026"
+            "&X-Amz-Signature=another-secret#access_token=fragment-secret"
+        )
+        safe = sanitize_url(value)
+        self.assertNotIn("SYNTHETIC_SECRET_2026", safe)
+        self.assertNotIn("another-secret", safe)
+        self.assertNotIn("fragment-secret", safe)
+        self.assertIn("lang=id", safe)
+        self.assertIn("page=2", safe)
+        self.assertIn("token=[REDACTED]", safe)
+        self.assertIn("X-Amz-Signature=[REDACTED]", safe)
 
     def test_jwt(self):
         jwt = (

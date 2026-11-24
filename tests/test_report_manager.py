@@ -35,7 +35,7 @@ class ReportManagerTests(unittest.TestCase):
         result = {
             "status": "PASSED",
             "pages": [{
-                "page_url": "https://example.test/a?token=secret#part",
+                "page_url": "https://example.test/a?lang=id&page=2&token=secret#part",
                 "access_token": "should-not-leak",
                 "signals": {
                     "password_fields": 1,
@@ -54,7 +54,10 @@ class ReportManagerTests(unittest.TestCase):
         self.assertNotEqual(first, second)
         payload = json.loads(first.read_text(encoding="utf-8"))
         page = payload["result"]["pages"][0]
-        self.assertEqual(page["page_url"], "https://example.test/a")
+        self.assertEqual(
+            page["page_url"],
+            "https://example.test/a?lang=id&page=2&token=[REDACTED]",
+        )
         self.assertEqual(page["access_token"], "[REDACTED]")
         self.assertEqual(page["signals"]["password_fields"], 1)
         self.assertEqual(page["signals"]["password"], "[REDACTED]")
@@ -73,6 +76,45 @@ class ReportManagerTests(unittest.TestCase):
             payload["result"]["evidence_path"],
             "evidence/screenshots/shot.png",
         )
+
+    def test_outside_path_is_redacted_without_leaking_basename(self):
+        outside = self.root / "outside-sensitive-name.txt"
+        path = report_manager.save_inspection_report(
+            self.project_id, "generic_uat", {"artifact": outside}
+        )
+        content = path.read_text(encoding="utf-8")
+        self.assertIn("[PATH_REDACTED]", content)
+        self.assertNotIn("outside-sensitive-name", content)
+
+    def test_reports_symlink_is_rejected_and_existing_reports_are_preserved(self):
+        prior = self.project_dir / "reports" / "prior.json"
+        prior.write_text('{"keep": true}', encoding="utf-8")
+        outside = self.root / "outside"
+        outside.mkdir()
+        reports = self.project_dir / "reports"
+        reports.rename(self.project_dir / "reports_original")
+        try:
+            reports.symlink_to(outside, target_is_directory=True)
+        except OSError as exc:
+            (self.project_dir / "reports_original").rename(reports)
+            self.skipTest(f"Symlink creation unavailable: {exc}")
+        try:
+            with self.assertRaises(ValueError):
+                report_manager.save_inspection_report(
+                    self.project_id, "generic_uat", {"status": "Passed"}
+                )
+            self.assertEqual(list(outside.iterdir()), [])
+            prior_original = (
+                self.project_dir / "reports_original" / "prior.json"
+            )
+            self.assertTrue(prior_original.is_file())
+            self.assertEqual(
+                prior_original.read_text(encoding="utf-8"),
+                '{"keep": true}',
+            )
+        finally:
+            reports.unlink()
+            (self.project_dir / "reports_original").rename(reports)
 
     def test_only_known_inspection_metrics_bypass_sensitive_redaction(self):
         self.assertFalse(report_manager._is_sensitive_key("password_fields"))
@@ -114,10 +156,125 @@ class ReportManagerTests(unittest.TestCase):
         payload = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(payload["inspection_type"], "frontend_homepage")
         self.assertEqual(payload["result"]["project_id"], self.project_id)
-        self.assertEqual(payload["result"]["requested_url"], "https://example.test/")
-        self.assertEqual(payload["result"]["final_url"], "https://example.test/home")
+        self.assertEqual(
+            payload["result"]["requested_url"],
+            "https://example.test/?token=[REDACTED]",
+        )
+        self.assertEqual(
+            payload["result"]["final_url"],
+            "https://example.test/home?session=[REDACTED]",
+        )
         self.assertEqual(payload["result"]["screenshot_path"], "evidence/screenshots/homepage.png")
         self.assertEqual(payload["result"]["status"], "Passed")
+
+    def test_free_text_sensitive_patterns_are_redacted_without_hiding_qa_text(self):
+        result = {
+            "page_title": "QA overview password=synthetic-pass",
+            "link_text": "Documentation token: synthetic-token",
+            "metadata": {
+                "api_key": "synthetic-api-key",
+                "note": "credential=synthetic-credential; public label preserved",
+            },
+            "exception_message": "request failed password=synthetic-exception",
+            "response_preview": "cookie=synthetic-cookie",
+        }
+        path = report_manager.save_inspection_report(
+            self.project_id, "frontend_qa", result
+        )
+        content = path.read_text(encoding="utf-8")
+        payload = json.loads(content)["result"]
+
+        for secret in (
+            "synthetic-pass", "synthetic-token", "synthetic-api-key",
+            "synthetic-credential", "synthetic-exception", "synthetic-cookie",
+        ):
+            self.assertNotIn(secret, content)
+        self.assertIn("QA overview", payload["page_title"])
+        self.assertIn("Documentation", payload["link_text"])
+        self.assertIn("public label preserved", payload["metadata"]["note"])
+        self.assertEqual(payload["response_preview"], "[REDACTED]")
+
+    def test_frontend_report_redacts_response_preview(self):
+        path = report_manager.save_inspection_report(
+            self.project_id,
+            "frontend_qa",
+            {
+                "status": ResultStatus.ACCESS_RESTRICTED,
+                "homepage": {
+                    "response_preview": "password=client-secret and session data",
+                },
+                "images": [],
+                "links": [],
+            },
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            payload["result"]["homepage"]["response_preview"], "[REDACTED]"
+        )
+
+    def test_report_redacts_multiple_sensitive_query_keys_but_keeps_safe_query(self):
+        marker = "SYNTHETIC_SECRET_2026"
+        path = report_manager.save_inspection_report(
+            self.project_id,
+            "generic_uat",
+            {
+                "page_url": (
+                    "https://example.test/a?lang=id&page=2&token=" + marker
+                    + "&signature=" + marker
+                ),
+                "note": "Observed page 2 in Indonesian.",
+            },
+        )
+        content = path.read_text(encoding="utf-8")
+        self.assertNotIn(marker, content)
+        self.assertIn("lang=id", content)
+        self.assertIn("page=2", content)
+        self.assertIn("[REDACTED]", content)
+        self.assertIn("Observed page 2", content)
+        self.assertNotIn("client-secret", path.read_text(encoding="utf-8"))
+
+    def test_unified_report_preserves_existing_frontend_report(self):
+        frontend = report_manager.save_inspection_report(
+            self.project_id, "frontend_qa",
+            {"status": ResultStatus.PASSED, "result_marker": "m1-kept"},
+        )
+        unified = report_manager.save_inspection_report(
+            self.project_id, "unified_qa",
+            {
+                "status": ResultStatus.NEEDS_REVIEW,
+                "frontend": {
+                    "homepage": {"response_preview": "raw response secret"},
+                },
+                "website_discovery": {"status": ResultStatus.PASSED},
+            },
+        )
+        self.assertTrue(frontend.is_file())
+        self.assertTrue(unified.is_file())
+        self.assertEqual(
+            json.loads(frontend.read_text(encoding="utf-8"))["result"]["result_marker"],
+            "m1-kept",
+        )
+        payload = json.loads(unified.read_text(encoding="utf-8"))
+        self.assertEqual(payload["inspection_type"], "unified_qa")
+        self.assertEqual(
+            payload["result"]["frontend"]["homepage"]["response_preview"],
+            "[REDACTED]",
+        )
+        self.assertNotIn("raw response secret", unified.read_text(encoding="utf-8"))
+
+    def test_failed_report_serialization_preserves_prior_report(self):
+        prior = self.project_dir / "reports" / "prior.json"
+        prior.write_text('{"prior": true}', encoding="utf-8")
+        with patch.object(report_manager.json, "dump", side_effect=OSError("synthetic write failure")):
+            with self.assertRaises(OSError):
+                report_manager.save_inspection_report(
+                    self.project_id, "generic_uat", {"new": True}
+                )
+        self.assertEqual(prior.read_text(encoding="utf-8"), '{"prior": true}')
+        self.assertEqual(
+            [item.name for item in (self.project_dir / "reports").iterdir()],
+            ["prior.json"],
+        )
 
     def test_rejects_unknown_inspection_type(self):
         with self.assertRaises(ValueError):

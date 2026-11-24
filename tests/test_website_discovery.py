@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from modules.frontend_scanner import ScannerConfig
 from modules.website_discovery import discover_website, _classify_page
 from core.result_status import ResultStatus
+from core.progress_tracking import ProgressReporter
 
 
 class TestWebsiteDiscovery(unittest.TestCase):
@@ -26,9 +27,15 @@ class TestWebsiteDiscovery(unittest.TestCase):
                     "/about": "<title>About</title><h1>About</h1><article>Text</article>",
                     "/contact": "<title>Contact</title><form><input><button>Send</button></form>",
                     "/forbidden": "<title>Forbidden</title>",
+                    "/rate-limit": "<title>Too Many Requests</title>",
                     "/server-error": "<title>Error</title>",
+                    "/cloudflare": (
+                        "<title>Just a moment...</title>"
+                        "<h1>Checking your browser before accessing this site.</h1>"
+                        "<a href='/contact'>Continue</a>"
+                    ),
                 }
-                status = 403 if path == "/forbidden" else 500 if path == "/server-error" else 200 if path in pages else 404
+                status = 403 if path == "/forbidden" else 429 if path == "/rate-limit" else 500 if path == "/server-error" else 200 if path in pages else 404
                 self.send_response(status)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
@@ -64,13 +71,20 @@ class TestWebsiteDiscovery(unittest.TestCase):
         self.temp.cleanup()
 
     def test_discovers_pages_and_form_components(self):
-        result = discover_website(self.config)
+        events = []
+        result = discover_website(
+            self.config, progress=ProgressReporter(events.append)
+        )
         self.assertEqual(result.status, ResultStatus.PASSED)
         self.assertTrue(result.completed)
         self.assertEqual(len(result.pages), 3)
         contact = next(p for p in result.pages if urlsplit(p.url).path == "/contact")
         self.assertEqual(contact.component_counts["forms"], 1)
         self.assertEqual(contact.page_type, "form")
+        terminal = [event for event in events if event.stage == "Website Discovery"][-1]
+        self.assertEqual(terminal.status, "completed")
+        self.assertEqual(terminal.current, 3)
+        self.assertIsNone(terminal.total)
 
     def test_external_links_are_not_crawled(self):
         discover_website(self.config)
@@ -93,8 +107,24 @@ class TestWebsiteDiscovery(unittest.TestCase):
             check_images=False, check_links=False,
             max_requests_per_minute=10, stop_after_consecutive_403=1,
         )
+        events = []
+        result = discover_website(
+            config, progress=ProgressReporter(events.append)
+        )
+        self.assertEqual(result.status, ResultStatus.ACCESS_RESTRICTED)
+        self.assertFalse(result.completed)
+        self.assertEqual(events[-1].status, "stopped")
+
+    def test_429_is_access_restricted_and_stops_discovery(self):
+        config = ScannerConfig(
+            project_id="DISCOVERY_429", project_name="429 Test",
+            base_url=self.origin + "/rate-limit", project_dir=self.project_dir,
+            check_images=False, check_links=False,
+            max_requests_per_minute=10, stop_after_consecutive_403=3,
+        )
         result = discover_website(config)
         self.assertEqual(result.status, ResultStatus.ACCESS_RESTRICTED)
+        self.assertEqual(result.pages[0].access_classification.classification, "HTTP_RATE_LIMITED")
         self.assertFalse(result.completed)
 
     def test_500_is_failed_and_needs_review(self):
@@ -107,6 +137,22 @@ class TestWebsiteDiscovery(unittest.TestCase):
         result = discover_website(config)
         self.assertEqual(result.pages[0].status, ResultStatus.FAILED)
         self.assertEqual(result.status, ResultStatus.NEEDS_REVIEW)
+
+    def test_cloudflare_challenge_stops_discovery_and_records_classification(self):
+        config = ScannerConfig(
+            project_id="DISCOVERY_CF", project_name="Cloudflare Test",
+            base_url=self.origin + "/cloudflare", project_dir=self.project_dir,
+            check_images=False, check_links=False,
+            max_requests_per_minute=10, stop_after_consecutive_403=3,
+        )
+        result = discover_website(config)
+        self.assertEqual(result.status, ResultStatus.ACCESS_RESTRICTED)
+        self.assertEqual(len(result.pages), 1)
+        self.assertEqual(
+            result.pages[0].access_classification.classification,
+            "CLOUDFLARE_CHALLENGE",
+        )
+        self.assertNotIn("/contact", self.hits)
 
 
 class TestPageClassification(unittest.TestCase):

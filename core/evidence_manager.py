@@ -5,10 +5,11 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
-from core.project_manager import PROJECTS_DIR, get_project, validate_project_id
+from core.project_manager import PROJECTS_DIR, get_project, get_project_directory, validate_project_id
+from core.path_safety import resolve_project_path
+from core.security import sanitize_text, sanitize_url
 
 
 _INDEX_NAME = "evidence_index.json"
@@ -20,18 +21,7 @@ _SENSITIVE_PARTS = (
 
 
 def _safe_url(value):
-    if not isinstance(value, str):
-        return None
-    try:
-        parsed = urlsplit(value)
-        if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname:
-            return "[URL_REDACTED]"
-        host = parsed.hostname
-        if parsed.port:
-            host = f"{host}:{parsed.port}"
-        return urlunsplit((parsed.scheme.lower(), host, parsed.path, "", ""))
-    except ValueError:
-        return "[URL_REDACTED]"
+    return sanitize_url(value)
 
 
 def _safe_metadata(value, key=None):
@@ -41,17 +31,17 @@ def _safe_metadata(value, key=None):
             return "[REDACTED]"
     if isinstance(value, dict):
         return {
-            str(item_key): _safe_metadata(item_value, str(item_key))
+            sanitize_text(item_key): _safe_metadata(item_value, str(item_key))
             for item_key, item_value in value.items()
         }
     if isinstance(value, (list, tuple)):
         return [_safe_metadata(item, key) for item in value]
     if isinstance(value, Path):
-        return value.name
+        return sanitize_text(value.name)
     if isinstance(value, str):
         if key and (key.lower().endswith("_url") or key.lower() == "url"):
             return _safe_url(value)
-        return value
+        return sanitize_text(value)
     if value is None or isinstance(value, (bool, int, float)):
         return value
     raise ValueError("Metadata evidence hanya boleh berisi data JSON sederhana.")
@@ -60,10 +50,10 @@ def _safe_metadata(value, key=None):
 def _project_evidence_dir(project_id):
     validate_project_id(project_id)
     get_project(project_id)
-    project_dir = (PROJECTS_DIR / project_id).resolve()
-    evidence_dir = project_dir / "evidence"
+    project_dir = get_project_directory(project_id)
+    evidence_dir = resolve_project_path(project_dir, "evidence")
     evidence_dir.mkdir(parents=True, exist_ok=True)
-    return project_dir, evidence_dir.resolve()
+    return project_dir, resolve_project_path(project_dir, "evidence")
 
 
 def _load_index(index_path, project_id):
@@ -137,7 +127,7 @@ def register_evidence(
 
     project_dir, evidence_dir = _project_evidence_dir(project_id)
     original_path = Path(file_path)
-    if original_path.is_symlink():
+    if original_path.is_symlink() or getattr(original_path, "is_junction", lambda: False)():
         raise ValueError("Symlink tidak diizinkan sebagai evidence.")
     candidate = original_path.resolve()
     try:
@@ -156,15 +146,15 @@ def register_evidence(
     for finding_id in related_finding_ids:
         if not isinstance(finding_id, str) or not finding_id.strip():
             raise ValueError("Setiap finding ID harus berupa teks non-kosong.")
-        finding_ids.append(finding_id.strip())
+        finding_ids.append(sanitize_text(finding_id.strip()))
 
     timestamp = datetime.now(timezone.utc)
     record = {
         "evidence_id": f"EV-{timestamp.strftime('%Y%m%dT%H%M%S%fZ')}-{uuid4().hex[:8]}",
         "project_id": project_id,
         "evidence_type": evidence_type,
-        "source": source.strip(),
-        "title": title.strip(),
+        "source": sanitize_text(source.strip()),
+        "title": sanitize_text(title.strip()),
         "page_url": _safe_url(page_url) if page_url else None,
         "file_path": relative_path.as_posix(),
         "file_size": candidate.stat().st_size,
@@ -200,7 +190,12 @@ def verify_evidence(project_id, evidence_id):
     )
     if record is None:
         raise KeyError("Evidence ID tidak ditemukan.")
-    candidate = (evidence_dir / record["file_path"]).resolve()
+    try:
+        candidate = resolve_project_path(
+            evidence_dir, record["file_path"]
+        )
+    except (ValueError, OSError):
+        return False
     try:
         candidate.relative_to(evidence_dir)
     except ValueError:

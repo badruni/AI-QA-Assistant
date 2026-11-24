@@ -150,6 +150,7 @@ class TestPlaywrightIntegration(unittest.TestCase):
         self.page = self.context.new_page()
 
     def tearDown(self):
+        self.guard.begin_shutdown()
         self.context.close()
 
     def get_hits(self, server_name, path):

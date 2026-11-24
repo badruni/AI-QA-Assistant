@@ -31,7 +31,7 @@ class TestLinkInspection(unittest.TestCase):
                         self.headers.get("Cookie")
                     )
 
-                if path in ("/", "/stop-page", "/timeout-page"):
+                if path in ("/", "/stop-page", "/timeout-page", "/rate-limit-page"):
                     if path == "/stop-page":
                         html = (
                             '<a href="/forbidden">Forbidden</a>'
@@ -39,6 +39,11 @@ class TestLinkInspection(unittest.TestCase):
                         )
                     elif path == "/timeout-page":
                         html = '<a href="/slow">Slow</a>'
+                    elif path == "/rate-limit-page":
+                        html = (
+                            '<a href="/rate-limit">Rate limited</a>'
+                            '<a href="/ok">Must not run</a>'
+                        )
                     else:
                         html = (
                             '<a href="/ok">OK</a>'
@@ -71,6 +76,8 @@ class TestLinkInspection(unittest.TestCase):
                     status = 500
                 elif path == "/forbidden":
                     status = 403
+                elif path == "/rate-limit":
+                    status = 429
                 elif path == "/redirect":
                     self.send_response(302)
                     self.send_header("Location", "/ok")
@@ -240,6 +247,23 @@ class TestLinkInspection(unittest.TestCase):
             results[0].status,
             ResultStatus.ACCESS_RESTRICTED,
         )
+        self.assertEqual(self.hits.get("/ok", 0), 0)
+
+    def test_scanner_stops_after_http_429(self):
+        config = ScannerConfig(
+            project_id="LINK_429_TEST",
+            project_name="Link Rate Limit Test",
+            base_url=self.origin + "/rate-limit-page",
+            project_dir=self.project_dir,
+            check_images=False,
+            check_links=True,
+            max_requests_per_minute=10,
+            stop_after_consecutive_403=3,
+        )
+        results = inspect_links(config)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].http_status, 429)
+        self.assertEqual(results[0].status, ResultStatus.ACCESS_RESTRICTED)
         self.assertEqual(self.hits.get("/ok", 0), 0)
 
 

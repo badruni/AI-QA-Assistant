@@ -1,13 +1,12 @@
-﻿from core.security import sanitize_text as sanitize_sensitive_text
+from core.security import sanitize_text as sanitize_sensitive_text
+from core.path_safety import resolve_project_directory, resolve_project_path
 from datetime import datetime
 from pathlib import Path
 import re
 import threading
 import traceback
 
-ROOT = Path(__file__).resolve().parent.parent
-SYSTEM_LOG_DIR = ROOT / "logs"
-PROJECTS_DIR = ROOT / "projects"
+from core.data_paths import PROJECTS_DIR, SYSTEM_LOG_DIR
 
 MAX_LOG_SIZE = 5 * 1024 * 1024  # 5 MB
 _WRITE_LOCK = threading.Lock()
@@ -18,7 +17,8 @@ SENSITIVE_KEYS = (
     "token", "access_token", "refresh_token",
     "api_key", "apikey",
     "authorization", "cookie", "set-cookie",
-    "secret", "client_secret",
+    "secret", "client_secret", "signature", "accesskeyid",
+    "privatekey", "authentication",
     "session", "sessionid",
     "username", "user_name"
 )
@@ -193,7 +193,19 @@ def write_project_log(
         )
         return
 
-    project_folder = PROJECTS_DIR / project_id
+    try:
+        project_folder = resolve_project_directory(
+            PROJECTS_DIR,
+            project_id,
+            require_exists=False
+        )
+    except (ValueError, OSError):
+        log_error(
+            "Menulis Project Log",
+            "Folder proyek tidak aman. Project Log tidak ditulis."
+        )
+        return
+
     log_folder = project_folder / "logs"
 
     now = datetime.now()

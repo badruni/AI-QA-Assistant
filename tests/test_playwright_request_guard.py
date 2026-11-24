@@ -1,4 +1,5 @@
-﻿import unittest
+﻿import asyncio
+import unittest
 from unittest.mock import Mock, patch
 
 from playwright.sync_api import Error as PlaywrightError
@@ -45,6 +46,18 @@ class TestPlaywrightRequestGuard(unittest.TestCase):
         for url in urls:
             with self.subTest(url=url):
                 self.assertTrue(self.guard.is_allowed_url(url))
+
+    def test_sensitive_query_blocked_but_ordinary_query_allowed(self):
+        self.assertTrue(
+            self.guard.is_allowed_url(
+                "https://client.example.com/catalog?lang=id&page=2"
+            )
+        )
+        self.assertFalse(
+            self.guard.is_allowed_url(
+                "https://client.example.com/catalog?lang=id&token=SYNTHETIC_SECRET_2026"
+            )
+        )
 
     def test_external_origin_blocked(self):
         urls = [
@@ -214,5 +227,77 @@ class TestPlaywrightRequestGuard(unittest.TestCase):
         route.fulfill.assert_not_called()
 
 
-if __name__ == "__main__":
+    def test_fetch_error_is_aborted_once(self):
+        route, _ = self.make_route("https://client.example.com/")
+        route.fetch.side_effect = PlaywrightError("network failure")
+
+        self.guard._handle_route(route)
+
+        route.abort.assert_called_once_with()
+        route.fulfill.assert_not_called()
+
+    def test_abort_failure_during_shutdown_is_tolerated_once(self):
+        route, _ = self.make_route("https://client.example.com/")
+
+        def failed_fetch(**kwargs):
+            self.guard.begin_shutdown()
+            raise PlaywrightError("context closed")
+
+        route.fetch.side_effect = failed_fetch
+        route.abort.side_effect = asyncio.CancelledError()
+
+        self.guard._handle_route(route)
+
+        route.fetch.assert_called_once_with(max_redirects=0)
+        route.abort.assert_called_once_with()
+        route.fulfill.assert_not_called()
+
+    def test_abort_failure_outside_shutdown_is_not_swallowed(self):
+        route, _ = self.make_route("https://client.example.com/")
+        route.fetch.side_effect = PlaywrightError("network failure")
+        route.abort.side_effect = PlaywrightError("route still active")
+
+        with self.assertRaisesRegex(PlaywrightError, "route still active"):
+            self.guard._handle_route(route)
+
+        route.abort.assert_called_once_with()
+        route.fulfill.assert_not_called()
+
+    def test_handler_after_shutdown_does_not_start_request_work(self):
+        route, _ = self.make_route("https://client.example.com/")
+        self.guard.begin_shutdown()
+
+        with patch.object(self.controller, "acquire") as acquire:
+            self.guard._handle_route(route)
+
+        acquire.assert_not_called()
+        route.fetch.assert_not_called()
+        route.abort.assert_called_once_with("blockedbyclient")
+        route.fulfill.assert_not_called()
+
+    def test_shutdown_while_fetch_is_pending_attempts_one_abort(self):
+        route, _ = self.make_route("https://client.example.com/")
+
+        def pending_fetch(**kwargs):
+            self.guard.begin_shutdown()
+            raise PlaywrightError("context closed during fetch")
+
+        route.fetch.side_effect = pending_fetch
+        route.abort.side_effect = asyncio.CancelledError()
+
+        self.guard._handle_route(route)
+
+        route.fetch.assert_called_once_with(max_redirects=0)
+        route.abort.assert_called_once_with()
+        route.fulfill.assert_not_called()
+
+    def test_terminal_route_action_is_not_repeated(self):
+        route, response = self.make_route("https://client.example.com/")
+
+        self.guard._handle_route(route)
+
+        route.fulfill.assert_called_once_with(response=response)
+        route.abort.assert_not_called()
+
+if __name__ == '__main__':
     unittest.main()

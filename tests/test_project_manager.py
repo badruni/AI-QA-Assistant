@@ -1,7 +1,7 @@
 
 import json
 import unittest
-import shutil
+import tempfile
 
 from pathlib import Path
 from unittest.mock import patch
@@ -22,14 +22,12 @@ TEST_PROJECT_ID = "PM_TEST_CLIENT"
 class TestProjectManager(unittest.TestCase):
 
     def setUp(self):
-        self.project_dir = PROJECTS_DIR / TEST_PROJECT_ID
-
-        if self.project_dir.exists():
-            shutil.rmtree(self.project_dir)
-
-    def tearDown(self):
-        if self.project_dir.exists():
-            shutil.rmtree(self.project_dir)
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.projects_patch = patch("core.project_manager.PROJECTS_DIR", Path(self.temp.name))
+        self.projects_patch.start()
+        self.addCleanup(self.projects_patch.stop)
+        self.project_dir = Path(self.temp.name) / TEST_PROJECT_ID
 
     def test_valid_project_id(self):
         self.assertEqual(
@@ -56,6 +54,30 @@ class TestProjectManager(unittest.TestCase):
             validate_url("https://example.com"),
             "https://example.com"
         )
+
+    def test_non_sensitive_query_is_preserved_for_operational_use(self):
+        url = "https://example.com/catalog?lang=id&page=2"
+        self.assertEqual(validate_url(url), url)
+
+        create_project(
+            TEST_PROJECT_ID, "Project Manager Test", url
+        )
+        self.assertEqual(get_project(TEST_PROJECT_ID)["base_url"], url)
+
+    def test_sensitive_query_is_rejected_before_project_config_is_written(self):
+        url = (
+            "https://example.com/?lang=id&access_token="
+            "SYNTHETIC_SECRET_2026&signature=other-secret"
+        )
+        with self.assertRaisesRegex(ValueError, "parameter query sensitif"):
+            create_project(
+                TEST_PROJECT_ID, "Project Manager Test", url
+            )
+        self.assertFalse(self.project_dir.exists())
+        self.assertFalse(any(
+            "SYNTHETIC_SECRET_2026" in path.read_text(encoding="utf-8")
+            for path in Path(self.temp.name).rglob("*.json")
+        ))
 
     def test_invalid_url(self):
         invalid_urls = [
@@ -182,7 +204,7 @@ class TestProjectManager(unittest.TestCase):
         original_mkdir = Path.mkdir
 
         failed_directory = (
-            self.project_dir / "documentation"
+            self.project_dir.resolve() / "documentation"
         )
 
         def simulate_mkdir_failure(path, *args, **kwargs):

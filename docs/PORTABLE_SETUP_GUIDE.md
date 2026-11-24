@@ -1,180 +1,157 @@
-# AI QA Assistant â€” Portable Setup Guide
+# Portable Setup and Recovery Guide
 
-## Tujuan
-Panduan untuk memindahkan dan menjalankan AI QA Assistant pada laptop lain.
+## Supported local setup
 
-## Persyaratan awal
-- Windows 10/11 64-bit untuk prosedur PowerShell ini.
-- Python 3.14.x 64-bit.
-- Koneksi internet saat instalasi dependensi dan browser.
-- Ruang penyimpanan yang cukup.
+- Windows 10/11 64-bit with PowerShell (the commands below are Windows-specific).
+- Python 3.14.x 64-bit is the verified scanner runtime for this repository.
+- `requirements.txt` pins Playwright 1.65.1 and python-docx 1.2.0. Chromium is installed separately by Playwright.
+- Network access is needed only to install Python packages and the browser. Do not use client credentials for setup or tests.
 
-## Isi paket
-Paket berisi kode aplikasi, modul, konfigurasi template, dokumentasi portabel, pengujian, dan daftar dependensi.
+Create a fresh virtual environment on each computer. Never copy `.venv` or `.venv-scanner` between computers or operating systems.
 
-Data klien, log, laporan, evidence, backup, serta virtual environment tidak disertakan.
+```powershell
+py -3.14 -m venv .venv-scanner
+.\.venv-scanner\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+python --version
+python -m playwright --version
+python -m unittest discover -s tests
+python agent.py
+```
 
-## Instalasi pada laptop baru
+If PowerShell blocks activation, use the environment interpreter directly, for example `\.venv-scanner\Scripts\python.exe agent.py`. Do not weaken machine-wide execution policy for this application.
 
-1. Ekstrak ZIP ke folder kerja, misalnya:
-   C:\AI-Projects\AI-QA-Assistant
+## First run and project data
 
-2. Buka PowerShell pada folder tersebut.
+Run `agent.py`, create a project with an authorized HTTP(S) website, and select it as the active project. Project data is stored under `projects/<project_id>/`: configuration, logs, reports, documentation, evidence, and the project's authorization record. Do not put passwords, tokens, cookies, or authorization headers in project config. Before running any scanner menu (4, 5, 6, or 10), use menu 11 to create an authorization tied to the configured target URL. The record requires the authorizing person, an ISO 8601 expiry including timezone, and the `frontend` plus `read_only` scopes. Creation requires typing `YA` to confirm explicit permission. Menu 11 can also view or revoke the current authorization. The Unified QA Workflow is read-only; it does not log in, submit forms, solve challenges, or bypass WAF/Cloudflare. Use it only with explicit authorization. Restricted access stops the relevant workflow stages.
 
-3. Buat virtual environment utama:
-   py -3.15 -m venv .venv
+The unified report is saved as a new JSON file under that project's `reports/`. Evidence files and their SHA-256 index are under `evidence/`. Evidence IDs in a report are emitted only when registration and hash verification succeeded. URL query strings and fragments are removed from report/evidence metadata; `response_preview` is always redacted.
 
-4. Aktifkan:
-   .\.venv\Scripts\Activate.ps1
+The unified report records evidence collection separately from the QA
+inspection result:
 
-5. Jalankan pengujian:
-   python -m unittest tests.test_security tests.test_logger_security tests.test_project_manager -v
+- `evidence_status`: `not_required` when no screenshots are expected,
+  `verified` when all expected evidence is verified, or `failed` when
+  any expected evidence is not verified.
+- `expected_evidence`: number of screenshots expected from workflow stages.
+- `verified_evidence`: number of evidence items successfully verified.
 
-6. Untuk scanner, buat environment terpisah:
-   py -3.14 -m venv .venv-scanner
-
-7. Aktifkan environment scanner:
-   .\.venv-scanner\Scripts\Activate.ps1
-
-8. Instal dependensi:
-   python -m pip install -r requirements.txt
-
-9. Instal Chromium:
-   python -m playwright install chromium
-
-10. Uji Chromium:
-    python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(headless=True); print('Chromium:', b.version); b.close(); p.stop(); print('STATUS: OK')"
-
-## Catatan penting
-
-- Jangan memindahkan folder .venv atau .venv-scanner antarperangkat.
-- Buat ulang environment pada setiap laptop.
-- Jangan memasukkan data klien ke paket distribusi kode.
-- Jangan menyimpan password, token, cookie, atau kredensial dalam konfigurasi maupun log.
-- Periksa konfigurasi proyek sebelum melakukan pemindaian.
-- Gunakan hanya website yang telah mendapat izin pengujian.
-- Simpan seluruh batch script pengembangan dan perbaikan di folder `batch_scripts\`, bukan di root repository.
-- Jalankan batch script dari root repository agar path relatif tetap sesuai.
-- Simpan backup dan arsip di folder `backups\`.
-- Backup data sebelum melakukan perubahan besar.
-
-## Status pengembangan terbaru
-
-- Project Manager: selesai.
-- Logging dan Sensitive Data Filter: selesai.
-- Konfigurasi scanner: berhasil diuji.
-- Homepage Inspection: selesai.
-- WAF Detection: selesai dan diuji dengan simulasi lokal.
-- Broken Images: selesai diimplementasikan; 3 test lulus.
-- Broken Links Inspection: selesai diimplementasikan; 8 test lulus menggunakan server lokal.
-- Regression test terbaru: 74 test lulus, 0 gagal.
-- Homepage Inspection: 7 test lulus.
-- HTTP Response Details: status code, status text, dan preview response body hingga 500 karakter.
-- Website Discovery: selesai diimplementasikan; 13 test lulus.
-
-## Checkpoint lanjutan
-
-Website Discovery tahap pertama telah diimplementasikan dan diuji.
-
-Pengembangan berikutnya:
-- Memperkuat klasifikasi halaman dan validasi hasil discovery.
-- Mengembangkan Generic UAT Inspection berdasarkan komponen yang ditemukan.
-- Mengembangkan UI/UX Evaluation dengan evidence.
-- Mengembangkan inspeksi khusus seperti Article Listing hanya jika relevan.
-- Mengintegrasikan hasil discovery ke alur aplikasi dan laporan QA.
-
-Paket ini merupakan snapshot pengembangan, bukan rilis produksi.
+The QA `result.status` remains the inspection result and is not replaced by
+the evidence status. Therefore, a QA inspection can pass while evidence
+verification fails. Evidence failure still causes the workflow's terminal
+processing status to fail.
 
 
-## Pembaruan Website Discovery
+### Optional external data directory
 
-2026-11-17:
-- Modul `modules/website_discovery.py` tersedia.
-- Maksimum awal 20 halaman per pemindaian.
-- Menggunakan request guard dan safety controller yang sudah tersedia.
-- Penemuan halaman internal dan deteksi komponen DOM.
-- Screenshot untuk halaman yang berhasil diperiksa.
-- Tidak melakukan interaksi yang mengubah data atau bypass mekanisme keamanan.
-- 13 test Website Discovery lulus.
-- Seluruh 74 regression test lulus.
+By default, project data is stored in the application's `projects/` directory and system logs are stored in `logs/`.
 
-Article Listing merupakan inspeksi khusus yang kondisional, bukan persyaratan universal setiap website.
+To keep these data folders separate from the application source, set `AI_QA_DATA_DIR` before starting the application. The value must be an absolute path.
 
-Catatan keamanan:
-- Hindari mencatat exception mentah browser atau jaringan.
-- Gunakan metadata aman untuk aktivitas dan hasil proses.
-- Sensitive data filter merupakan perlindungan tambahan, bukan jaminan seluruh rahasia terdeteksi.
+PowerShell example:
 
-## Generic UAT Inspection
+```powershell
+$env:AI_QA_DATA_DIR = 'D:\AI_QA_Assistant_Data'
+python agent.py
+```
 
-Generic UAT merupakan tahap inspeksi DOM read-only setelah Website Discovery.
-Modul baru berada di `modules/generic_uat_inspection.py` dan test-nya berada
-di `tests/test_generic_uat_inspection.py`.
+With this setting, project data is stored in `D:\AI_QA_Assistant_Data\projects\` and system logs in `D:\AI_QA_Assistant_Data\logs\`. The project template remains inside the application's `config/` directory.
 
-Tidak ada aksi klik atau submit formulir. Screenshot disimpan di folder evidence
-masing-masing proyek. Seluruh request tetap menggunakan request guard dan
-safety controller yang sudah ada. Temuan awal dicatat sebagai `Needs Review`
-dan perlu validasi lanjutan sebelum disebut bug. Jika Website Discovery berstatus
-`Access Restricted`, tahap Generic UAT dilewati. Heuristik accessible name/label
-bersifat awal dan bukan implementasi penuh perhitungan nama aksesibel WCAG.
+The `$env:` setting applies to the current PowerShell session. If it is not set, the application uses the legacy data locations inside the application directory. Do not change the data location while the application is running.
+
+This foundation centralizes the `projects/` and `logs/` paths. Client-specific namespace isolation (`client_id`) and migration of existing client data are later tasks and are not yet implemented.
+
+## Backup
+
+Close the application before backing up. Copy the source separately from project data, and keep the destination new and uniquely named. Preserve `projects/`, `logs/`, `evidence/`, reports, and existing backups. Do not include virtual environments in a portable source archive. Encrypt backups that contain client data and restrict access according to client requirements.
+
+Example to a new destination (change the path; ensure it does not already exist):
+
+```powershell
+$backup = 'D:\QA-Backups\AI-QA-Assistant-2026-11-19'
+if (Test-Path -LiteralPath $backup) { throw 'Backup destination already exists; choose a new name.' }
+New-Item -ItemType Directory -Path $backup | Out-Null
+Copy-Item -LiteralPath '.\projects' -Destination $backup -Recurse
+Copy-Item -LiteralPath '.\config' -Destination $backup -Recurse
+```
+
+Store source code through the approved repository or a separate source archive. Never overwrite an existing backup.
+
+## Restore and verify
+
+Restore into a new, empty staging directory; do not restore over a live project folder. Verify expected project IDs, report counts, evidence index entries, and SHA-256 status in Evidence Viewer. Compare the restored evidence/report inventory with the backup before selecting or using the restored project. The M4 staging restore drill verified the current application and external project/log data using SHA-256. This was not a production rollback, disaster-recovery simulation, or restore test using real client production data.
+
+## Update and rollback
+
+1. Close the application and create a fresh, non-overwriting backup of source and project data.
+2. Obtain the update from the approved repository/archive. Do not replace `projects/`, `logs/`, `reports/`, `evidence/`, or `backups/` with a source update.
+3. Review changes and run the documented tests in the fresh local Python 3.14 environment.
+4. If update verification fails, close the app and use a separate new staging copy of the previous source version. Keep current project data untouched. Compare inventories and validate evidence hashes before directing the application to the recovered source/data. Do not delete or move the failed version until an operator has confirmed recovery.
+
+A synthetic backup/restore and source rollback staging drill passed in temporary directories. In addition, the M4 full backup and restore staging drill completed on 24 November 2026:
+
+- Application: 2,486 files, all SHA-256 matched.
+- External projects: 57 files, all SHA-256 matched.
+- External logs: 11 files, all SHA-256 matched.
+- Total: 2,554 files verified, with zero missing, extra, or mismatched files.
+- Restored application smoke test: imports succeeded and Project Manager found 5 valid projects.
+- Full regression on restored application: 280 tests, 3 skipped, 0 failed; exit code 0.
+
+The test log is stored in the restore test directory under `restore_logs/FULL_REGRESSION_TEST.txt`. The full backup includes a manifest and manifest checksum. This drill used a separate staging copy and did not overwrite the active application or source data. It does not establish production rollback or disaster-recovery readiness. Real client production recovery remains unverified.
+
+Some regression tests emitted `Screenshot evidence registration failed; inspection continues.` while still passing. This warning is recorded and should not be interpreted as proof that every screenshot was registered successfully.
+
+## Troubleshooting
+
+- `ModuleNotFoundError: playwright`: activate `.venv-scanner` or call its Python executable.
+- Browser executable missing: run `python -m playwright install chromium` in the same environment.
+- DOCX export requires `python-docx==1.2.0`; install all declared packages with `python -m pip install -r requirements.txt`. If export still reports a missing library, verify the active interpreter and package with `python -m pip show python-docx`.
+- Browser launch or timeout: confirm Chromium install, local permissions, and the target's authorized availability. Do not evade a challenge.
+- `Access Restricted`: stop; review the recorded HTTP/WAF/Cloudflare indicator and ask the site owner for an approved access path. The tool does not bypass protection.
+- Evidence missing or hash mismatch: treat evidence as unverified; do not claim it as report evidence. Preserve the file/index and investigate from a copy.
+- Report write failure: the inspection may still be shown, but no persisted report should be claimed. Preserve prior reports and inspect local disk permissions/free space.
+
+## Security and limitations
+
+The scanner follows same-origin navigation policy, request rate limits, and consecutive-403 stop threshold. Redirect destinations are not followed. The tool is not an authentication tester and does not execute state-changing actions. Sensitive-data filtering is defense in depth; never submit or enter real credentials. External Cloudflare/WAF behavior and production backup recovery have not been verified in this local-only readiness milestone.
 
 
-## Authentication Discovery
+## Update M3.2 — 24 November 2026
+Launcher menyimpan kondisi AI_QA_DATA_DIR sebelum aplikasi berjalan dan mengembalikannya setelah aplikasi selesai. Jika variabel sebelumnya belum tersedia, launcher menghapusnya kembali. Pengaturan ini tidak mengubah environment variable Windows secara permanen.
 
-2026-11-17:
-- Modul `modules/authentication_discovery.py` menambahkan deteksi indikasi login
-  secara read-only.
-- Pemeriksaan tidak melakukan login, mengisi kredensial, klik, atau submit.
-- Nilai password, OTP, token, cookie, dan session tidak dibaca atau disimpan.
-- `NO_LOGIN_DETECTED` memiliki confidence LOW dan tidak membuktikan ketiadaan
-  fitur autentikasi.
-- Jalankan regression test dengan:
-  `.\.venv-scanner\Scripts\python.exe -m unittest tests.test_authentication_discovery -v`
+### Menjalankan aplikasi dengan data eksternal
 
+Pada perangkat yang telah dikonfigurasi, gunakan launcher dari folder utama aplikasi:
 
-## Penyimpanan Laporan Inspeksi JSON
+```powershell
+.\run_ai_qa_assistant.ps1
+```
 
-Hasil Generic UAT Inspection dan Authentication Discovery disimpan otomatis
-sebagai file JSON terpisah di `projects/<PROJECT_ID>/reports/`. Setiap eksekusi
-menghasilkan nama file unik sehingga laporan sebelumnya tidak ditimpa.
-Laporan memuat tipe inspeksi, versi skema, waktu UTC, ID proyek, dan hasil
-terstruktur. URL pada field URL disimpan tanpa query string maupun fragment.
-Field yang namanya mengindikasikan password, token, secret, cookie, credential,
-authorization, atau API key akan disamarkan. Hanya nama metrik inspeksi yang diizinkan secara eksplisit yang dikecualikan. Screenshot tetap berada di folder
-evidence dan dirujuk dengan path relatif jika berada di dalam folder proyek.
-Jika penyimpanan laporan gagal, hasil inspeksi tetap ditampilkan dan aplikasi
-memberikan peringatan.
+Launcher mengatur `AI_QA_DATA_DIR` ke:
 
-## Evidence Management
+`%USERPROFILE%\AI_QA_Assistant_Data`
 
-Evidence Management menyimpan metadata evidence per proyek pada
-`evidence/evidence_index.json`. File evidence tetap berada di folder proyek dan
-tidak dipindahkan oleh modul registrasi. Indeks mencatat ID unik, sumber, jenis,
-waktu UTC, path relatif, ukuran file, SHA-256, URL halaman yang telah disanitasi,
-dan relasi finding bila tersedia. Jalankan pengujian dengan:
-`python -m unittest tests.test_evidence_manager -v`.
+Launcher memilih Python dari `.venv-scanner`, kemudian `.venv`, atau Python sistem jika keduanya tidak tersedia. Untuk instalasi baru, buat virtual environment lokal dan instal dependensi terlebih dahulu.
 
-## Evidence Management ? screenshot registry integration
+Environment variable hanya diatur untuk proses launcher dan aplikasi yang dijalankannya. Menjalankan `python agent.py` secara langsung tanpa mengatur `AI_QA_DATA_DIR` tetap menggunakan lokasi legacy.
 
-- Screenshot hasil Frontend Homepage Scanner, Website Discovery, dan Generic UAT didaftarkan ke `evidence/evidence_index.json` melalui `core/evidence_manager.py`.
-- File screenshot tetap disimpan di `evidence/screenshots/`; integrasi tidak memindahkan atau menghapus evidence yang sudah ada.
-- Registrasi dilakukan hanya setelah screenshot berhasil dibuat. Kegagalan pencatatan tidak menggagalkan proses inspeksi dan hanya menghasilkan peringatan generik tanpa detail exception.
-- Metadata menyimpan sumber inspeksi dan URL halaman yang disanitasi oleh Evidence Manager.
+### Status migrasi pada perangkat pengembangan
 
-## Evidence Viewer
+Folder `projects/` dan `logs/` telah disalin ke direktori data eksternal dan diverifikasi menggunakan SHA-256. Data sumber lama tidak dihapus.
 
-Evidence Viewer dapat dibuka dari menu utama aplikasi. Viewer bekerja pada proyek
-aktif; jika belum ada proyek aktif, pengguna diminta memilih proyek terlebih dahulu.
-Fitur meliputi daftar evidence, detail metadata, membuka screenshot menggunakan
-aplikasi bawaan Windows, dan verifikasi integritas SHA-256.
+Hasil verifikasi:
+- Projects: 57 file, 0 missing, 0 extra, 0 mismatch.
+- Logs: 10 file, 0 missing, 0 extra, 0 mismatch.
+- Regression: 280 tests, 3 skipped, 0 failed.
+- Launcher: berhasil menjalankan aplikasi dan membaca 5 proyek terdaftar.
 
-Viewer hanya membaca indeks dan file evidence. Viewer tidak menghapus, memindahkan,
-atau mengubah evidence. Path file divalidasi agar tetap berada di dalam folder
-evidence proyek. Attachment ditampilkan sebagai metadata dan tidak dibuka otomatis.
+Lokasi aktual perangkat pengembangan:
 
-### Membuka screenshot pada Windows
+`<USER_HOME>\AI_QA_Assistant_Data`
 
-Evidence Viewer mencoba membuka screenshot melalui asosiasi aplikasi default Windows.
-Jika pemanggilan langsung menghasilkan WinError 1155, aplikasi meneruskan permintaan
-melalui Windows Explorer agar asosiasi aplikasi modern (misalnya Paint 3D) tetap
-digunakan. Aplikasi tidak memaksa Paint klasik dan tidak mengubah asosiasi file Windows.
+Lokasi aktual tersebut merupakan konfigurasi perangkat ini, bukan lokasi wajib untuk laptop lain. Setiap perangkat dapat menggunakan direktori data sendiri.
+
+### Batasan
+
+Migrasi ini baru mencakup `projects/` dan `logs/`. Namespace `client_id`, isolasi multi-klien, dan pemindahan kategori data lain belum selesai. Lakukan backup sebelum perubahan besar dan jangan menghapus data sumber lama sebelum seluruh proses pemulihan diverifikasi.

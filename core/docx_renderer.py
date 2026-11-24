@@ -96,7 +96,10 @@ def render_approved_docx(project_id, document_id):
         from docx.shared import Mm, Inches, Pt, RGBColor
         from docx.enum.section import WD_ORIENT
     except ImportError as exc:
-        raise RuntimeError("python-docx belum terpasang pada environment ini.") from exc
+        raise RuntimeError(
+            "python-docx belum terpasang. Jalankan `python -m pip install -r "
+            "requirements.txt` pada environment aplikasi."
+        ) from exc
 
     record = get_document(project_id, document_id)
     manifest, version = record["manifest"], record["version"]

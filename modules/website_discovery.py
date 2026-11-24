@@ -12,6 +12,14 @@ from core.playwright_request_guard import PlaywrightRequestGuard
 from core.request_safety import RequestSafetyController
 from core.result_status import ResultStatus
 from core.evidence_manager import register_evidence
+from core.access_classification import (
+    AccessClassification,
+    classify_access_restriction,
+)
+from core.path_safety import resolve_project_path
+from core.progress_tracking import (
+    emit_progress, result_outcome_labels, terminal_status_for_results,
+)
 
 DEFAULT_MAX_PAGES = 20
 
@@ -28,6 +36,7 @@ class DiscoveredPage:
     internal_links: tuple
     screenshot_path: Path | None
     message: str
+    access_classification: AccessClassification | None = None
 
 
 @dataclass(frozen=True)
@@ -130,7 +139,46 @@ def _register_screenshot_evidence(
         return False
 
 
-def discover_website(config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000):
+def discover_website(
+    config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000, controller=None,
+    progress=None,
+):
+    emit_progress(progress, "Website Discovery", "waiting", "Menunggu Website Discovery.")
+    emit_progress(progress, "Website Discovery", "running", "Memulai discovery; jumlah halaman belum diketahui.")
+    try:
+        result = _discover_website_impl(
+            config, max_pages=max_pages, timeout_ms=timeout_ms,
+            controller=controller, progress=progress,
+        )
+    except Exception:
+        emit_progress(
+            progress, "Website Discovery", "failed",
+            "Website Discovery gagal sebelum selesai.",
+        )
+        raise
+
+    terminal = terminal_status_for_results(
+        [result.status, *(item.status for item in result.pages)]
+    )
+    outcomes = result_outcome_labels(
+        [result.status, *(item.status for item in result.pages)]
+    )
+    emit_progress(
+        progress, "Website Discovery", terminal,
+        "Discovery selesai diproses; hasil QA: "
+        f"{result.status.value}"
+        f"{'; hasil halaman: ' + outcomes if outcomes else ''}; "
+        f"halaman diperiksa: {len(result.pages)}; "
+        "jumlah halaman total tidak diketahui.",
+        len(result.pages), None,
+    )
+    return result
+
+
+def _discover_website_impl(
+    config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000, controller=None,
+    progress=None,
+):
     """Read-only discovery halaman internal dan komponen DOM."""
     if isinstance(max_pages, bool) or not isinstance(max_pages, int):
         raise ValueError("max_pages harus berupa bilangan bulat.")
@@ -141,13 +189,14 @@ def discover_website(config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000):
     if timeout_ms < 1000:
         raise ValueError("timeout_ms minimal 1000 milidetik.")
 
-    controller = RequestSafetyController(
+    controller = controller or RequestSafetyController(
         config.max_requests_per_minute,
         config.stop_after_consecutive_403,
     )
     guard = PlaywrightRequestGuard(controller, config.base_url)
-    screenshots_dir = Path(config.project_dir) / "evidence" / "screenshots"
+    screenshots_dir = resolve_project_path(config.project_dir, "evidence", "screenshots")
     screenshots_dir.mkdir(parents=True, exist_ok=True)
+    screenshots_dir = resolve_project_path(config.project_dir, "evidence", "screenshots")
 
     queue = [config.base_url]
     queued = {config.base_url}
@@ -166,6 +215,11 @@ def discover_website(config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000):
         page = context.new_page()
         try:
             while queue and len(results) < max_pages:
+                emit_progress(
+                    progress, "Website Discovery", "running",
+                    "Memeriksa halaman berikutnya; antrean dapat bertambah.",
+                    len(results) + 1, None,
+                )
                 target_url = queue.pop(0)
                 if target_url in visited:
                     continue
@@ -180,6 +234,7 @@ def discover_website(config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000):
                 internal_links = []
                 screenshot_path = None
                 message = ""
+                access_classification = AccessClassification(False, "NONE")
 
                 try:
                     response = page.goto(
@@ -191,20 +246,16 @@ def discover_website(config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000):
                         http_status = response.status
                     title = page.title()
                     body = page.locator("body").inner_text(timeout=3000)
-                    lower = (title + " " + body).casefold()
-                    waf = (
-                        "bot_headless" in lower
-                        or ("request blocked" in lower and "bot detected" in lower)
-                        or "verify you are human" in lower
-                        or "checking your browser" in lower
+                    access_classification = classify_access_restriction(
+                        http_status, title, body
                     )
 
-                    if waf:
+                    if access_classification.restricted:
                         status = ResultStatus.ACCESS_RESTRICTED
-                        message = "Indikator challenge/blokir keamanan terdeteksi."
-                    elif http_status in (401, 403):
-                        status = ResultStatus.ACCESS_RESTRICTED
-                        message = f"Akses dibatasi (HTTP {http_status})."
+                        message = (
+                            "Akses dibatasi; klasifikasi: "
+                            f"{access_classification.classification}."
+                        )
                     elif http_status is not None and http_status >= 400:
                         status = ResultStatus.FAILED
                         message = f"Halaman merespons HTTP {http_status}."
@@ -251,8 +302,14 @@ def discover_website(config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000):
                             )
 
                 except PlaywrightTimeoutError:
-                    status = ResultStatus.TIMEOUT
-                    message = "Waktu tunggu halaman habis."
+                    if controller.is_stopped:
+                        status = ResultStatus.ACCESS_RESTRICTED
+                        message = controller.stop_reason or (
+                            "Scanner dihentikan demi keamanan."
+                        )
+                    else:
+                        status = ResultStatus.TIMEOUT
+                        message = "Waktu tunggu halaman habis."
                 except PlaywrightError as error:
                     if controller.is_stopped:
                         status = ResultStatus.ACCESS_RESTRICTED
@@ -266,6 +323,7 @@ def discover_website(config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000):
                     http_status=http_status, status=status, page_type=page_type,
                     component_counts=counts, internal_links=tuple(internal_links),
                     screenshot_path=screenshot_path, message=message,
+                    access_classification=access_classification,
                 ))
 
                 if status == ResultStatus.ACCESS_RESTRICTED:
@@ -275,6 +333,7 @@ def discover_website(config, max_pages=DEFAULT_MAX_PAGES, timeout_ms=30000):
                     stopped_reason = controller.stop_reason or "Scanner dihentikan demi keamanan."
                     break
         finally:
+            guard.begin_shutdown()
             context.close()
             browser.close()
 

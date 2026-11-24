@@ -5,10 +5,12 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
+from core.path_safety import resolve_project_directory, resolve_project_path
+from core.security import has_sensitive_url_query
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PROJECTS_DIR = ROOT / "projects"
+from core.data_paths import PROJECTS_DIR
 TEMPLATE_FILE = ROOT / "config" / "project_template.json"
 
 PROJECT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -56,6 +58,12 @@ def validate_url(url, required=True):
                 "URL tidak boleh mengandung username atau password."
             )
 
+        if has_sensitive_url_query(url):
+            raise ValueError(
+                "URL tidak boleh mengandung parameter query sensitif. "
+                "Gunakan URL tanpa token atau kredensial."
+            )
+
         # Memastikan format port valid jika port dicantumkan.
         parsed.port
 
@@ -74,10 +82,17 @@ def list_projects():
 
     for folder in PROJECTS_DIR.iterdir():
 
-        if not folder.is_dir():
+        try:
+            safe_folder = resolve_project_directory(
+                PROJECTS_DIR, folder.name, require_exists=True
+            )
+        except (ValueError, FileNotFoundError, OSError):
             continue
 
-        config_file = folder / "project_config.json"
+        if not safe_folder.is_dir():
+            continue
+
+        config_file = resolve_project_path(safe_folder, "project_config.json")
 
         if not config_file.is_file():
             continue
@@ -119,7 +134,9 @@ def create_project(project_id, project_name, base_url, cms_url=""):
 
     PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    project_dir = PROJECTS_DIR / project_id
+    project_dir = resolve_project_directory(
+        PROJECTS_DIR, project_id, require_exists=False
+    )
 
     if project_dir.exists():
         raise FileExistsError(
@@ -177,9 +194,8 @@ def create_project(project_id, project_name, base_url, cms_url=""):
 def get_project(project_id):
     """Mengambil konfigurasi satu proyek."""
 
-    validate_project_id(project_id)
-
-    config_file = PROJECTS_DIR / project_id / "project_config.json"
+    project_dir = resolve_project_directory(PROJECTS_DIR, project_id)
+    config_file = resolve_project_path(project_dir, "project_config.json")
 
     if not config_file.is_file():
         raise FileNotFoundError(
@@ -193,3 +209,16 @@ def get_project(project_id):
         raise ValueError("Identitas proyek tidak sesuai dengan folder.")
 
     return config
+
+
+def get_project_directory(project_id, require_exists=True):
+    """Return the canonical, contained directory for a project ID."""
+    return resolve_project_directory(
+        PROJECTS_DIR, project_id, require_exists=require_exists
+    )
+
+
+def get_project_path(project_id, *parts):
+    """Return a safe path below an existing project's directory."""
+    project_dir = get_project_directory(project_id)
+    return resolve_project_path(project_dir, *parts)

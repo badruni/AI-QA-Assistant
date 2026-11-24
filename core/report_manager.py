@@ -3,10 +3,11 @@ from datetime import datetime, timezone
 from enum import Enum
 import json
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
-from core.project_manager import PROJECTS_DIR, get_project, validate_project_id
+from core.project_manager import PROJECTS_DIR, get_project, get_project_directory, validate_project_id
+from core.path_safety import resolve_project_path
+from core.security import sanitize_text, sanitize_url
 
 
 _SENSITIVE_KEY_PARTS = (
@@ -44,19 +45,14 @@ def _is_sensitive_key(key):
     return any(part in normalized for part in _SENSITIVE_KEY_PARTS)
 
 def _safe_url(value):
-    try:
-        parsed = urlsplit(value)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname:
-            return "[URL_REDACTED]"
-        host = parsed.hostname
-        if parsed.port:
-            host = f"{host}:{parsed.port}"
-        return urlunsplit((parsed.scheme, host, parsed.path, "", ""))
-    except (TypeError, ValueError):
-        return "[URL_REDACTED]"
+    return sanitize_url(value)
 
 
 def _to_json_safe(value, project_dir, key=None):
+    # Homepage response content is diagnostic only and can contain secrets or
+    # client data. Never persist its preview in a report.
+    if key is not None and str(key).lower() == "response_preview":
+        return "[REDACTED]"
     if key is not None and _is_sensitive_key(key):
         return "[REDACTED]"
     if isinstance(value, Enum):
@@ -70,35 +66,43 @@ def _to_json_safe(value, project_dir, key=None):
         }
     if isinstance(value, dict):
         return {
-            str(item_key): _to_json_safe(item_value, project_dir, str(item_key))
+            sanitize_text(item_key): _to_json_safe(
+                item_value, project_dir, str(item_key)
+            )
             for item_key, item_value in value.items()
         }
     if isinstance(value, (list, tuple)):
         return [_to_json_safe(item, project_dir, key) for item in value]
     if isinstance(value, Path):
         try:
-            return value.resolve().relative_to(project_dir.resolve()).as_posix()
+            relative_path = value.resolve().relative_to(
+                project_dir.resolve()
+            ).as_posix()
         except (OSError, ValueError):
-            return value.name
+            return "[PATH_REDACTED]"
+        return sanitize_text(relative_path)
     if isinstance(value, str):
         if key and (key.lower().endswith("_url") or key.lower() == "url"):
             return _safe_url(value)
-        return value
+        return sanitize_text(value)
     if value is None or isinstance(value, (bool, int, float)):
         return value
-    return str(value)
+    return sanitize_text(value)
 
 
 def save_inspection_report(project_id, inspection_type, result):
     # Simpan hasil inspeksi ke JSON unik secara atomik.
     validate_project_id(project_id)
-    if inspection_type not in ("generic_uat", "authentication_discovery", "frontend_homepage"):
+    if inspection_type not in (
+        "generic_uat", "authentication_discovery", "frontend_homepage",
+        "frontend_qa", "unified_qa",
+    ):
         raise ValueError("Jenis inspeksi laporan tidak dikenal.")
     get_project(project_id)
-
-    project_dir = PROJECTS_DIR / project_id
-    reports_dir = project_dir / "reports"
+    project_dir = get_project_directory(project_id)
+    reports_dir = resolve_project_path(project_dir, "reports")
     reports_dir.mkdir(parents=True, exist_ok=True)
+    reports_dir = resolve_project_path(project_dir, "reports")
 
     timestamp = datetime.now(timezone.utc)
     payload = {

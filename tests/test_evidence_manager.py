@@ -37,15 +37,67 @@ class EvidenceManagerTests(unittest.TestCase):
             self.image,
             "screenshot",
             "generic_uat",
-            page_url="https://example.test/a?token=secret#section",
+            page_url="https://example.test/a?lang=id&page=2&token=secret#section",
             related_finding_ids=["F-001"],
             metadata={"password": "must-not-leak", "viewport": "1365x768"},
         )
         self.assertTrue(record["evidence_id"].startswith("EV-"))
         self.assertEqual(record["file_path"], "screenshots/shot.png")
-        self.assertEqual(record["page_url"], "https://example.test/a")
+        self.assertEqual(
+            record["page_url"],
+            "https://example.test/a?lang=id&page=2&token=[REDACTED]",
+        )
         self.assertEqual(record["metadata"]["password"], "[REDACTED]")
         self.assertEqual(record["related_finding_ids"], ["F-001"])
+
+    def test_free_text_sensitive_patterns_in_title_and_metadata_are_redacted(self):
+        record = evidence_manager.register_evidence(
+            self.project_id,
+            self.image,
+            "screenshot",
+            "frontend_scanner",
+            title="Account password=synthetic-title",
+            metadata={
+                "summary": "token=synthetic-token api_key: synthetic-key",
+                "label": "Public product screenshot",
+            },
+        )
+        content = (self.project_dir / "evidence" / "evidence_index.json").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("synthetic-title", content)
+        self.assertNotIn("synthetic-token", content)
+        self.assertNotIn("synthetic-key", content)
+        self.assertIn("Public product screenshot", content)
+        self.assertIn("[REDACTED]", record["title"])
+        self.assertIn("[REDACTED]", record["metadata"]["summary"])
+        self.assertEqual(record["metadata"]["label"], "Public product screenshot")
+
+    def test_sensitive_url_metadata_is_redacted_without_dropping_safe_query(self):
+        marker = "SYNTHETIC_SECRET_2026"
+        record = evidence_manager.register_evidence(
+            self.project_id,
+            self.image,
+            "screenshot",
+            "website_discovery",
+            page_url=(
+                "https://example.test/path?lang=id&page=3&api_key=" + marker
+                + "&X-Amz-Signature=" + marker
+            ),
+            metadata={
+                "observed_url": (
+                    "https://example.test/path?lang=id&signature=" + marker
+                ),
+            },
+        )
+        content = (self.project_dir / "evidence" / "evidence_index.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn(marker, content)
+        self.assertIn("lang=id", content)
+        self.assertIn("page=3", content)
+        self.assertIn("[REDACTED]", content)
 
     def test_index_is_written_and_listing_returns_record(self):
         record = evidence_manager.register_evidence(

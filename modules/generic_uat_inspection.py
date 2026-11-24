@@ -13,6 +13,14 @@ from core.playwright_request_guard import PlaywrightRequestGuard
 from core.request_safety import RequestSafetyController
 from core.result_status import ResultStatus
 from core.evidence_manager import register_evidence
+from core.access_classification import (
+    AccessClassification,
+    classify_access_restriction,
+)
+from core.path_safety import resolve_project_path
+from core.progress_tracking import (
+    emit_progress, result_outcome_labels, terminal_status_for_results,
+)
 
 
 @dataclass(frozen=True)
@@ -32,6 +40,7 @@ class UATPageResult:
     component_summary: dict
     screenshot_path: Path | None
     message: str
+    access_classification: AccessClassification | None = None
 
 
 @dataclass(frozen=True)
@@ -175,7 +184,44 @@ def _register_screenshot_evidence(
         return False
 
 
-def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
+def inspect_generic_uat(
+    config, discovery_result, timeout_ms=30000, controller=None, progress=None,
+):
+    emit_progress(progress, "Generic UAT", "waiting", "Menunggu Generic UAT.")
+    emit_progress(progress, "Generic UAT", "running", "Menyiapkan halaman hasil Discovery.")
+    try:
+        result = _inspect_generic_uat_impl(
+            config, discovery_result, timeout_ms=timeout_ms,
+            controller=controller, progress=progress,
+        )
+    except Exception:
+        emit_progress(progress, "Generic UAT", "failed", "Generic UAT gagal sebelum selesai.")
+        raise
+
+    terminal = terminal_status_for_results(
+        [result.status, *(item.status for item in result.pages)]
+    )
+    outcomes = result_outcome_labels(
+        [result.status, *(item.status for item in result.pages)]
+    )
+    total_pages = (
+        0 if discovery_result.status == ResultStatus.ACCESS_RESTRICTED else
+        sum(item.status == ResultStatus.PASSED for item in discovery_result.pages)
+    )
+    emit_progress(
+        progress, "Generic UAT", terminal,
+        "Generic UAT selesai diproses; hasil QA: "
+        f"{result.status.value}"
+        f"{'; hasil halaman: ' + outcomes if outcomes else ''}; "
+        f"halaman diperiksa: {len(result.pages)}.",
+        len(result.pages), total_pages,
+    )
+    return result
+
+
+def _inspect_generic_uat_impl(
+    config, discovery_result, timeout_ms=30000, controller=None, progress=None,
+):
     """Inspeksi DOM read-only pada halaman PASSED dari Website Discovery."""
     if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int):
         raise ValueError("timeout_ms harus berupa bilangan bulat.")
@@ -217,13 +263,14 @@ def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
             message="Generic UAT tidak dijalankan karena tidak ada halaman yang memenuhi syarat.",
         )
 
-    controller = RequestSafetyController(
+    controller = controller or RequestSafetyController(
         config.max_requests_per_minute,
         config.stop_after_consecutive_403,
     )
     guard = PlaywrightRequestGuard(controller, config.base_url)
-    screenshots_dir = Path(config.project_dir) / "evidence" / "screenshots"
+    screenshots_dir = resolve_project_path(config.project_dir, "evidence", "screenshots")
     screenshots_dir.mkdir(parents=True, exist_ok=True)
+    screenshots_dir = resolve_project_path(config.project_dir, "evidence", "screenshots")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     page_results = []
@@ -240,6 +287,11 @@ def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
         page = context.new_page()
         try:
             for index, discovered in enumerate(discovered_pages, start=1):
+                emit_progress(
+                    progress, "Generic UAT", "running",
+                    "Memeriksa halaman hasil Discovery.",
+                    index, len(discovered_pages),
+                )
                 if controller.is_stopped:
                     stopped_reason = controller.stop_reason or (
                         "Inspeksi dihentikan oleh kontrol keamanan."
@@ -262,6 +314,7 @@ def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
                 screenshot_path = None
                 status = ResultStatus.INCONCLUSIVE
                 message = ""
+                access_classification = AccessClassification(False, "NONE")
 
                 try:
                     response = page.goto(
@@ -272,14 +325,26 @@ def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
                     if response is not None:
                         http_status = response.status
 
+                    try:
+                        title = page.title()
+                        body_text = page.locator("body").inner_text(timeout=3000)
+                    except PlaywrightError:
+                        title, body_text = "", ""
+                    access_classification = classify_access_restriction(
+                        http_status, title, body_text
+                    )
+
                     if controller.is_stopped:
                         status = ResultStatus.ACCESS_RESTRICTED
                         message = controller.stop_reason or (
                             "Inspeksi dihentikan oleh kontrol keamanan."
                         )
-                    elif http_status in (401, 403):
+                    elif access_classification.restricted:
                         status = ResultStatus.ACCESS_RESTRICTED
-                        message = f"Akses dibatasi (HTTP {http_status})."
+                        message = (
+                            "Akses dibatasi; klasifikasi: "
+                            f"{access_classification.classification}."
+                        )
                     elif http_status is not None and http_status >= 400:
                         status = ResultStatus.FAILED
                         message = f"Halaman merespons HTTP {http_status}."
@@ -313,8 +378,14 @@ def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
                             )
 
                 except PlaywrightTimeoutError:
-                    status = ResultStatus.TIMEOUT
-                    message = "Waktu tunggu halaman habis."
+                    if controller.is_stopped:
+                        status = ResultStatus.ACCESS_RESTRICTED
+                        message = controller.stop_reason or (
+                            "Inspeksi dihentikan demi keamanan."
+                        )
+                    else:
+                        status = ResultStatus.TIMEOUT
+                        message = "Waktu tunggu halaman habis."
                 except PlaywrightError as error:
                     if controller.is_stopped:
                         status = ResultStatus.ACCESS_RESTRICTED
@@ -335,6 +406,7 @@ def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
                     component_summary=summary,
                     screenshot_path=screenshot_path,
                     message=message,
+                    access_classification=access_classification,
                 ))
 
                 if status == ResultStatus.ACCESS_RESTRICTED:
@@ -346,6 +418,7 @@ def inspect_generic_uat(config, discovery_result, timeout_ms=30000):
                     )
                     break
         finally:
+            guard.begin_shutdown()
             context.close()
             browser.close()
 

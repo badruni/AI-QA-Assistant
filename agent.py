@@ -1,12 +1,60 @@
 
 import json
 import os
+import queue
 import subprocess
+import threading
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
+
+WIB = timezone(timedelta(hours=7))
+INDONESIAN_MONTHS = (
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+)
+
+
+def _parse_authorization_expiry_input(date_text, time_text):
+    """Convert user-friendly DD-MM-YYYY and HH:MM WIB input to ISO 8601."""
+    try:
+        local_value = datetime.strptime(
+            f"{date_text.strip()} {time_text.strip()}",
+            "%d-%m-%Y %H:%M",
+        ).replace(tzinfo=WIB)
+    except (AttributeError, ValueError):
+        raise ValueError(
+            "Tanggal/waktu tidak valid. Gunakan DD-MM-YYYY dan HH:MM (WIB)."
+        ) from None
+    if local_value <= datetime.now(WIB):
+        raise ValueError("Masa berlaku harus berada di masa depan.")
+    return local_value.isoformat()
+
+
+def _format_authorization_expiry(value):
+    """Format stored ISO 8601 expiry as Indonesian date/time in WIB."""
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return value
+        local_value = parsed.astimezone(WIB)
+        month = INDONESIAN_MONTHS[local_value.month - 1]
+        return (
+            f"{local_value.day} {month} {local_value.year}, "
+            f"{local_value:%H:%M} WIB"
+        )
+    except (AttributeError, TypeError, ValueError):
+        return str(value)
+
 
 from core.result_status import ResultStatus
+from core.authorization_manager import (
+    create_authorization, get_authorization, revoke_authorization,
+    validate_authorization,
+)
+from core.progress_tracking import ProgressReporter
 from core.report_manager import save_inspection_report
 from core.evidence_manager import verify_evidence
+from core.security import sanitize_text, sanitize_url
 from core.evidence_viewer import (
     list_project_evidence,
     get_evidence_details,
@@ -28,11 +76,12 @@ from core.project_manager import (
 
 from modules.frontend_scanner import (
     load_scanner_config,
-    inspect_homepage
+    run_frontend_qa_workflow,
 )
 from modules.website_discovery import discover_website
 from modules.generic_uat_inspection import inspect_generic_uat
 from modules.authentication_discovery import inspect_authentication
+from modules.qa_workflow import run_unified_qa_workflow
 
 from modules.documentation_generator import generate_document_draft
 from core.document_viewer import open_document_viewer
@@ -49,12 +98,14 @@ def show_menu(active_project_id=None):
     print("1. Periksa konfigurasi template")
     print("2. Tampilkan struktur proyek")
     print("3. Kelola proyek klien")
-    print("4. Jalankan Frontend Homepage Scanner")
+    print("4. Jalankan Frontend QA Workflow")
     print("5. Jalankan Generic UAT Inspection")
     print("6. Jalankan Authentication Discovery")
     print("7. Documentation Generator")
     print("8. Evidence Viewer")
     print("9. Keluar")
+    print("10. Unified QA Workflow (Frontend + Advanced Inspection)")
+    print("11. Kelola Otorisasi QA")
 
     if active_project_id:
         print(f"\nProyek aktif: {active_project_id}")
@@ -88,8 +139,8 @@ def check_template():
 
         print("\nKonfigurasi berhasil dibaca.")
         print("Nama project :", config.get("project_name"))
-        print("Frontend URL :", config.get("base_url"))
-        print("CMS URL      :", config.get("cms_url") or "(belum diatur)")
+        print("Frontend URL :", sanitize_url(config.get("base_url")))
+        print("CMS URL      :", sanitize_url(config.get("cms_url")) if config.get("cms_url") else "(belum diatur)")
         print("Scanner      : belum dijalankan")
 
         log_info(
@@ -176,8 +227,8 @@ def show_project_list():
     for number, project in enumerate(projects, start=1):
         print(f"\n{number}. {project['project_name']}")
         print("   Project ID :", project["project_id"])
-        print("   Frontend   :", project["base_url"])
-        print("   CMS URL    :", project["cms_url"] or "(belum diatur)")
+        print("   Frontend   :", sanitize_url(project["base_url"]))
+        print("   CMS URL    :", sanitize_url(project["cms_url"]) if project["cms_url"] else "(belum diatur)")
 
 
 def create_client_project():
@@ -207,7 +258,7 @@ def create_client_project():
         )
 
     except (ValueError, FileExistsError, FileNotFoundError) as error:
-        print("\n[ERROR]", error)
+        print("\n[ERROR]", sanitize_text(error))
 
         log_warning(
             "Membuat proyek klien",
@@ -253,7 +304,7 @@ def select_active_project():
 
     except (ValueError, FileNotFoundError, json.JSONDecodeError) as error:
         print("\n[ERROR] Proyek tidak dapat dipilih.")
-        print("Detail:", error)
+        print("Detail:", sanitize_text(error))
 
         log_warning(
             "Memilih proyek aktif",
@@ -277,8 +328,8 @@ def show_active_project(active_project_id):
         print("================================")
         print("Project ID :", project.get("project_id"))
         print("Nama       :", project.get("project_name"))
-        print("Frontend   :", project.get("base_url"))
-        print("CMS URL    :", project.get("cms_url") or "(belum diatur)")
+        print("Frontend   :", sanitize_url(project.get("base_url")))
+        print("CMS URL    :", sanitize_url(project.get("cms_url")) if project.get("cms_url") else "(belum diatur)")
         print("Dibuat     :", project.get("created_at", "(tidak tersedia)"))
 
     except Exception as error:
@@ -291,9 +342,70 @@ def show_active_project(active_project_id):
         )
 
 
+def _frontend_qa_terminal_status(result, report_error=None):
+    if report_error is not None:
+        return "failed"
+    if result.status == ResultStatus.ACCESS_RESTRICTED:
+        return "stopped"
+    if result.status in (
+        ResultStatus.FAILED,
+        ResultStatus.BLOCKED,
+        ResultStatus.TIMEOUT,
+    ):
+        return "failed"
+    if not getattr(result, "evidence_ids", ()):
+        return "failed"
+    return "completed"
+
+
+def _display_progress_event(event, previous_stage=None):
+    if previous_stage is not None and event.stage != previous_stage:
+        print()
+
+    count = ""
+    if event.current is not None and event.total is not None:
+        count = f" | item {event.current}/{event.total}"
+    elif event.current is not None:
+        count = f" | item {event.current} (total belum diketahui)"
+    else:
+        count = " | total belum diketahui"
+
+    print(
+        f"\r[{event.status.upper()}] {event.stage}{count} | {event.activity}",
+        end="",
+        flush=True,
+    )
+    return event.stage
+
+
+def _project_authorization_allowed(config):
+    """Fail closed before standalone scanner menus make network requests."""
+    try:
+        allowed, reason = validate_authorization(
+            config.project_id,
+            config.base_url,
+            required_scope=["frontend", "read_only"],
+        )
+    except Exception:
+        allowed, reason = False, "authorization_check_failed"
+    if not allowed:
+        safe_reason = sanitize_text(str(reason or "authorization_invalid"))
+        print(
+            "\n[BLOCKED] Pemindaian tidak dimulai karena otorisasi tidak valid "
+            f"({safe_reason})."
+        )
+        print("Gunakan menu 11 untuk membuat atau memeriksa otorisasi proyek.")
+        log_warning(
+            "Authorization Preflight",
+            f"Pemindaian diblokir sebelum request: {safe_reason}.",
+        )
+        return False
+    return True
+
+
 def run_frontend_homepage_scanner(active_project_id):
     print("\n================================")
-    print("     FRONTEND HOMEPAGE SCANNER")
+    print("     FRONTEND QA WORKFLOW")
     print("================================")
 
     if not active_project_id:
@@ -308,46 +420,141 @@ def run_frontend_homepage_scanner(active_project_id):
 
     try:
         config = load_scanner_config(active_project_id)
+        if not _project_authorization_allowed(config):
+            return active_project_id
 
-        print("\nMemulai pemeriksaan homepage...")
+        print("\nMemulai siklus QA frontend...")
         print("Proyek:", config.project_name)
         print("Project ID:", config.project_id)
 
-        result = inspect_homepage(config)
-        try:
-            report_path = save_inspection_report(
-                active_project_id, "frontend_homepage", result
+        progress_events = queue.Queue()
+        outcome = {}
+
+        def run_workflow():
+            reporter = ProgressReporter(progress_events.put)
+            reporter.emit(
+                "Frontend QA", "waiting", "Menyiapkan worker scanner."
             )
+            try:
+                result = run_frontend_qa_workflow(config, progress=reporter)
+                outcome["result"] = result
+
+                reporter.emit(
+                    "Report Generation", "waiting",
+                    "Menunggu hasil inspeksi untuk disimpan.",
+                )
+                reporter.emit(
+                    "Report Generation", "running",
+                    "Menyimpan laporan frontend_qa.", 0, 1,
+                )
+                try:
+                    outcome["report_path"] = save_inspection_report(
+                        active_project_id, "frontend_qa", result
+                    )
+                except Exception as report_error:
+                    outcome["report_error"] = report_error
+                    reporter.emit(
+                        "Report Generation", "failed",
+                        "Laporan gagal disimpan; hasil inspeksi tetap tersedia.",
+                        0, 1,
+                    )
+                else:
+                    reporter.emit(
+                        "Report Generation", "completed",
+                        "Laporan frontend_qa tersimpan.", 1, 1,
+                    )
+
+                report_error = outcome.get("report_error")
+                overall = _frontend_qa_terminal_status(result, report_error)
+                if result.status == ResultStatus.ACCESS_RESTRICTED:
+                    activity = "Workflow berhenti karena akses dibatasi."
+                elif overall == "failed":
+                    activity = (
+                        "Workflow selesai diproses dengan hasil QA "
+                        f"{result.status.value}; evidence verified: "
+                        f"{len(getattr(result, 'evidence_ids', ())) }/1; "
+                        f"report saved: {'no' if report_error else 'yes'}."
+                    )
+                else:
+                    activity = (
+                        "Workflow selesai diproses; hasil QA: "
+                        f"{result.status.value}; evidence verified: "
+                        f"{len(getattr(result, 'evidence_ids', ())) }/1."
+                    )
+                reporter.emit("Frontend QA", overall, activity)
+            except Exception as error:
+                outcome["error"] = error
+                reporter.emit(
+                    "Frontend QA", "failed",
+                    "Workflow gagal sebelum seluruh tahap selesai.",
+                )
+            finally:
+                progress_events.put(None)
+
+        progress_events.put(
+            ProgressReporter().emit(
+                "Frontend QA", "waiting", "Menunggu scanner dimulai."
+            )
+        )
+        worker = threading.Thread(
+            target=run_workflow,
+            name="frontend-qa-worker",
+            daemon=True,
+        )
+        worker.start()
+
+        last_stage = None
+        while True:
+            event = progress_events.get()
+            if event is None:
+                break
+            last_stage = _display_progress_event(event, last_stage)
+        print()
+        worker.join()
+
+        if "error" in outcome:
+            raise outcome["error"]
+        result = outcome["result"]
+        report_path = outcome.get("report_path")
+        report_error = outcome.get("report_error")
+
+        if report_path is not None:
             print("Laporan JSON :", report_path)
-        except Exception as report_error:
+        if report_error is not None:
             print(
-                "[WARNING] Laporan Frontend Homepage gagal disimpan. "
+                "[WARNING] Laporan Frontend QA gagal disimpan. "
                 "Hasil inspeksi tetap tersedia."
             )
             log_warning(
-                "Frontend Homepage Scanner",
-                "Hasil inspeksi tersedia, tetapi laporan JSON gagal disimpan."
+                "Frontend QA Workflow",
+                "Hasil inspeksi tersedia, tetapi laporan JSON gagal disimpan.",
             )
 
         print("\n================================")
         print("       HASIL PEMERIKSAAN")
         print("================================")
         print("Project ID :", result.project_id)
-        print("HTTP Status:", result.http_status or "(tidak tersedia)")
-        print("Page Title :", result.page_title or "(tidak tersedia)")
-        print("Final URL  :", result.final_url or "(tidak tersedia)")
+        print("HTTP Status:", result.homepage.http_status or "(tidak tersedia)")
+        print("Page Title :", sanitize_text(result.homepage.page_title) if result.homepage.page_title else "(tidak tersedia)")
+        print("Final URL  :", sanitize_url(result.homepage.final_url) if result.homepage.final_url else "(tidak tersedia)")
         print("Status     :", result.status.value)
-        print("Pesan      :", result.message)
+        print("Homepage   :", result.homepage.status.value, "-", result.homepage.message)
+        print("Gambar     :", result.image_status.value if result.image_status else "Skipped",
+              f"({len(result.image_results)} item) - {result.image_message}")
+        print("Tautan     :", result.link_status.value if result.link_status else "Skipped",
+              f"({len(result.link_results)} item) - {result.link_message}")
+        if result.stopped_reason:
+            print("Penghentian:", result.stopped_reason)
 
-        if result.screenshot_path:
-            print("Screenshot :", result.screenshot_path)
+        if result.homepage.screenshot_path:
+            print("Screenshot :", result.homepage.screenshot_path)
         else:
             print("Screenshot : Tidak tersedia")
 
         log_info(
-            "Frontend Homepage Scanner",
+            "Frontend QA Workflow",
             (
-                f"Pemeriksaan selesai. "
+                f"Siklus QA frontend selesai. "
                 f"Project ID: {active_project_id}, "
                 f"Status: {result.status.value}"
             )
@@ -355,7 +562,7 @@ def run_frontend_homepage_scanner(active_project_id):
 
     except (ValueError, FileNotFoundError, json.JSONDecodeError) as error:
         print("\n[ERROR] Scanner tidak dapat dijalankan.")
-        print("Detail:", error)
+        print("Detail:", sanitize_text(error))
 
         log_warning(
             "Frontend Homepage Scanner",
@@ -382,7 +589,6 @@ def run_frontend_homepage_scanner(active_project_id):
     return active_project_id
 
 
-
 def run_authentication_discovery(active_project_id):
     print("\n================================")
     print("       AUTHENTICATION DISCOVERY")
@@ -397,6 +603,8 @@ def run_authentication_discovery(active_project_id):
 
     try:
         config = load_scanner_config(active_project_id)
+        if not _project_authorization_allowed(config):
+            return active_project_id
         print("\nTahap 1/2: Website Discovery...")
         discovery = discover_website(config)
         print("Discovery status:", discovery.status.value)
@@ -435,7 +643,7 @@ def run_authentication_discovery(active_project_id):
         print("Pesan         :", result.message)
 
         for item in result.pages:
-            print("\n- URL:", item.page_url)
+            print("\n- URL:", sanitize_url(item.page_url))
             print("  HTTP:", item.http_status or "(tidak tersedia)")
             print("  Status:", item.status.value)
             if item.signals:
@@ -452,7 +660,7 @@ def run_authentication_discovery(active_project_id):
         )
     except (ValueError, FileNotFoundError, json.JSONDecodeError) as error:
         print("\n[ERROR] Authentication Discovery tidak dapat dijalankan.")
-        print("Detail:", error)
+        print("Detail:", sanitize_text(error))
         log_warning(
             "Authentication Discovery",
             "Konfigurasi proyek tidak memenuhi persyaratan."
@@ -482,6 +690,8 @@ def run_generic_uat_inspection(active_project_id):
 
     try:
         config = load_scanner_config(active_project_id)
+        if not _project_authorization_allowed(config):
+            return active_project_id
 
         print("\nTahap 1/2: Website Discovery...")
         discovery = discover_website(config)
@@ -525,7 +735,7 @@ def run_generic_uat_inspection(active_project_id):
         print("Pesan      :", result.message)
 
         for page_result in result.pages:
-            print("\n- URL:", page_result.page_url)
+            print("\n- URL:", sanitize_url(page_result.page_url))
             print("  HTTP:", page_result.http_status or "(tidak tersedia)")
             print("  Status:", page_result.status.value)
             print("  Komponen:", page_result.component_summary)
@@ -535,9 +745,9 @@ def run_generic_uat_inspection(active_project_id):
         if result.findings:
             print("\nINDIKASI UNTUK DITINJAU")
             for number, finding in enumerate(result.findings, start=1):
-                print(f"{number}. [{finding.category}] {finding.element}")
-                print("   URL   :", finding.page_url)
-                print("   Detail:", finding.issue)
+                print(f"{number}. [{finding.category}] {sanitize_text(finding.element)}")
+                print("   URL   :", sanitize_url(finding.page_url))
+                print("   Detail:", sanitize_text(finding.issue))
                 print("   Status:", finding.status.value)
 
         log_info(
@@ -552,7 +762,7 @@ def run_generic_uat_inspection(active_project_id):
 
     except (ValueError, FileNotFoundError, json.JSONDecodeError) as error:
         print("\n[ERROR] Generic UAT tidak dapat dijalankan.")
-        print("Detail:", error)
+        print("Detail:", sanitize_text(error))
         log_warning(
             "Generic UAT Inspection",
             "Konfigurasi proyek tidak memenuhi persyaratan inspeksi."
@@ -573,6 +783,265 @@ def run_generic_uat_inspection(active_project_id):
             ]
         )
 
+    return active_project_id
+
+
+def manage_project_authorization(active_project_id):
+    """View, create, or revoke this project's explicit QA authorization."""
+    if not active_project_id:
+        active_project_id = select_active_project()
+        if not active_project_id:
+            print("\nPengelolaan otorisasi dibatalkan: belum ada proyek aktif.")
+            return None
+
+    config = load_scanner_config(active_project_id)
+    while True:
+        print("\n================================")
+        print("       OTORISASI QA PROJECT")
+        print("================================")
+        print("Project ID :", active_project_id)
+        print("Target     :", sanitize_url(config.base_url))
+        print("1. Lihat status otorisasi")
+        print("2. Buat / perbarui otorisasi")
+        print("3. Cabut otorisasi aktif")
+        print("0. Kembali")
+
+        choice = input("\nPilih menu: ").strip()
+        try:
+            if choice == "0":
+                break
+            if choice == "1":
+                record = get_authorization(active_project_id)
+                if record is None:
+                    print("[INFO] Belum ada otorisasi untuk proyek ini.")
+                else:
+                    print("Status       :", record.get("status", "unknown"))
+                    print("Target       :", sanitize_url(record.get("target_url")))
+                    print("Diberikan oleh:", sanitize_text(record.get("authorized_by", "")))
+                    print("Scope        :", ", ".join(record.get("scope", [])))
+                    print("Berlaku sampai:", _format_authorization_expiry(record.get("expires_at", "")))
+                    print(
+                        "Konfirmasi admin:",
+                        "Ya" if record.get("admin_access_confirmed") else "Tidak",
+                    )
+            elif choice == "2":
+                print("\nOtorisasi hanya boleh dibuat jika Anda memiliki izin eksplisit.")
+                print("Target diambil dari konfigurasi proyek dan tidak dapat diganti di sini.")
+                confirmation = input(
+                    "Ketik YA untuk mengonfirmasi izin pengujian pada target ini: "
+                ).strip()
+                if confirmation != "YA":
+                    print("[INFO] Pembuatan otorisasi dibatalkan.")
+                    continue
+                authorized_by = input("Nama pemberi otorisasi: ").strip()
+                while True:
+                    expiry_date = input(
+                        "Tanggal kedaluwarsa (DD-MM-YYYY): "
+                    ).strip()
+                    expiry_time = input(
+                        "Waktu kedaluwarsa (24 jam, WIB, HH:MM): "
+                    ).strip()
+                    try:
+                        expires_at = _parse_authorization_expiry_input(
+                            expiry_date, expiry_time
+                        )
+                        break
+                    except ValueError as error:
+                        print("[ERROR]", sanitize_text(error))
+                        print("Silakan masukkan tanggal dan waktu kembali.")
+                admin_answer = input(
+                    "Apakah administrator sudah mengonfirmasi akses resmi/"
+                    "allowlisting bila diperlukan? (y/N): "
+                ).strip().lower()
+                if admin_answer not in ("", "y", "n"):
+                    print("[ERROR] Jawaban admin harus y atau n.")
+                    continue
+                record = create_authorization(
+                    active_project_id,
+                    config.base_url,
+                    authorized_by,
+                    ["frontend", "read_only"],
+                    expires_at,
+                    admin_access_confirmed=(admin_answer == "y"),
+                )
+                print("[SUCCESS] Otorisasi tersimpan untuk proyek ini.")
+                print("Authorization ID:", record["authorization_id"])
+                print("Berlaku sampai   :", _format_authorization_expiry(record["expires_at"]))
+            elif choice == "3":
+                current = get_authorization(active_project_id)
+                if current is None or current.get("status") != "active":
+                    print("[INFO] Tidak ada otorisasi aktif untuk dicabut.")
+                    continue
+                print("Target:", sanitize_url(current.get("target_url")))
+                confirmation = input(
+                    "Ketik YA untuk mencabut otorisasi aktif: "
+                ).strip()
+                if confirmation != "YA":
+                    print("[INFO] Pencabutan dibatalkan.")
+                    continue
+                revoked_by = input("Nama pencabut otorisasi: ").strip()
+                reason = input("Alasan pencabutan (boleh kosong): ").strip()
+                revoke_authorization(active_project_id, revoked_by, reason)
+                print("[SUCCESS] Otorisasi aktif telah dicabut.")
+            else:
+                print("Pilihan tidak valid.")
+        except (ValueError, OSError) as error:
+            print("[ERROR] Pengelolaan otorisasi gagal:", sanitize_text(error))
+    return active_project_id
+
+
+def run_unified_qa_inspection(active_project_id):
+    """Run and save the complete project-scoped QA workflow."""
+    print("\n================================")
+    print("       UNIFIED QA WORKFLOW")
+    print("================================")
+    if not active_project_id:
+        print("\nBelum ada proyek aktif.")
+        active_project_id = select_active_project()
+        if not active_project_id:
+            print("\nUnified QA Workflow tidak dijalankan.")
+            return None
+
+    try:
+        config = load_scanner_config(active_project_id)
+        progress_events = queue.Queue()
+        observed_events = []
+        outcome = {}
+
+        def publish(event):
+            observed_events.append(event)
+            progress_events.put(event)
+
+        def run_workflow():
+            reporter = ProgressReporter(publish)
+            reporter.emit(
+                "Unified QA Workflow", "waiting",
+                "Menunggu Unified QA Workflow dimulai.",
+            )
+            reporter.emit(
+                "Unified QA Workflow", "running",
+                "Menjalankan seluruh tahap inspeksi proyek.",
+            )
+            try:
+                result = run_unified_qa_workflow(config, progress=reporter)
+                outcome["result"] = result
+                reporter.emit(
+                    "Report Generation", "waiting",
+                    "Menunggu hasil Unified QA untuk disimpan.",
+                )
+                reporter.emit(
+                    "Report Generation", "running",
+                    "Menyimpan laporan unified_qa.", 0, 1,
+                )
+                try:
+                    outcome["report_path"] = save_inspection_report(
+                        active_project_id, "unified_qa", result
+                    )
+                except Exception as report_error:
+                    outcome["report_error"] = report_error
+                    reporter.emit(
+                        "Report Generation", "failed",
+                        "Laporan Unified QA gagal disimpan.", 0, 1,
+                    )
+                else:
+                    reporter.emit(
+                        "Report Generation", "completed",
+                        "Laporan unified_qa tersimpan.", 1, 1,
+                    )
+
+                evidence_failed = any(
+                    event.stage == "Unified Evidence Collection"
+                    and event.status == "failed"
+                    for event in observed_events
+                )
+                result_status = getattr(result.status, "value", result.status)
+                if outcome.get("report_error") is not None or evidence_failed:
+                    terminal = "failed"
+                elif result_status == ResultStatus.ACCESS_RESTRICTED.value:
+                    terminal = "stopped"
+                elif result_status in (
+                    ResultStatus.FAILED.value,
+                    ResultStatus.BLOCKED.value,
+                    ResultStatus.TIMEOUT.value,
+                ):
+                    terminal = "failed"
+                else:
+                    terminal = "completed"
+                reporter.emit(
+                    "Unified QA Workflow", terminal,
+                    "Workflow selesai diproses; hasil QA: "
+                    f"{result_status}; report saved: "
+                    f"{'no' if outcome.get('report_error') else 'yes'}; "
+                    f"evidence verified: {len(result.evidence_ids)}.",
+                )
+            except Exception as error:
+                outcome["error"] = error
+                reporter.emit(
+                    "Unified QA Workflow", "failed",
+                    "Unified QA gagal sebelum seluruh tahap selesai.",
+                )
+            finally:
+                progress_events.put(None)
+
+        progress_events.put(ProgressReporter().emit(
+            "Unified QA Workflow", "waiting", "Menunggu worker Unified QA."
+        ))
+        worker = threading.Thread(
+            target=run_workflow,
+            name="unified-qa-worker",
+            daemon=True,
+        )
+        worker.start()
+        last_stage = None
+        while True:
+            event = progress_events.get()
+            if event is None:
+                break
+            last_stage = _display_progress_event(event, last_stage)
+        print()
+        worker.join()
+        if "error" in outcome:
+            raise outcome["error"]
+
+        result = outcome["result"]
+        report_path = outcome.get("report_path")
+        report_error = outcome.get("report_error")
+        if report_path is not None:
+            print("Laporan QA  :", report_path)
+        if report_error is not None:
+            print(
+                "[WARNING] Laporan Unified QA gagal disimpan. "
+                "Hasil inspeksi tetap tersedia."
+            )
+            log_warning(
+                "Unified QA Workflow",
+                "Hasil tersedia, tetapi laporan QA gagal disimpan.",
+            )
+
+        print("Project ID  :", result.project_id)
+        print("Status      :", result.status.value)
+        for stage in result.stages:
+            label = stage.status.value if stage.status else "Skipped"
+            print(f"{stage.name:26}: {label} — {stage.message}")
+        print("Evidence IDs:", ", ".join(result.evidence_ids) or "Tidak ada")
+        log_info(
+            "Unified QA Workflow",
+            f"Project ID: {result.project_id}, Status: {result.status.value}",
+        )
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as error:
+        print("\n[ERROR] Unified QA tidak dapat dijalankan.")
+        print("Detail:", sanitize_text(error))
+        log_warning(
+            "Unified QA Workflow",
+            "Konfigurasi proyek tidak memenuhi persyaratan inspeksi.",
+        )
+    except Exception as error:
+        print("\n[ERROR] Terjadi kendala saat Unified QA Workflow.")
+        print("Detail error dapat diperiksa di folder logs.")
+        log_exception(
+            "Unified QA Workflow", error,
+            "Siklus QA mengalami kendala yang tidak tertangani.",
+        )
     return active_project_id
 
 def project_manager_menu(active_project_id):
@@ -760,7 +1229,7 @@ def run_documentation_generator(active_project_id):
                     open_document_viewer(active_project_id, doc_id)
                 print("DOCX final belum dibuat. Persetujuan hanya tersedia setelah seluruh bagian diverifikasi.")
             except Exception as error:
-                print("\n[INFO] Draft tidak dapat dibuat:", error)
+                print("\n[INFO] Draft tidak dapat dibuat:", sanitize_text(error))
         elif choice == "4":
             docs = list_project_document_drafts(active_project_id)
             if not docs:
@@ -790,7 +1259,7 @@ def run_documentation_generator(active_project_id):
                     output = render_approved_docx(active_project_id, doc_id)
                     print("DOCX dibuat:", output)
             except (ValueError, IndexError, OSError, RuntimeError) as error:
-                print("[INFO] Aksi dokumen tidak dapat diselesaikan:", error)
+                print("[INFO] Aksi dokumen tidak dapat diselesaikan:", sanitize_text(error))
         else:
             print("Pilihan tidak valid.")
     return active_project_id
@@ -845,7 +1314,13 @@ def main():
                 )
                 print("AI QA Assistant ditutup.")
                 break
-                
+
+            elif choice == "10":
+                active_project_id = run_unified_qa_inspection(active_project_id)
+
+            elif choice == "11":
+                active_project_id = manage_project_authorization(active_project_id)
+
             else:
                 print("Pilihan tidak valid.")
                 log_warning(

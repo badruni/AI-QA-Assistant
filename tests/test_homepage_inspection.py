@@ -1,20 +1,20 @@
 ﻿import tempfile
 import threading
 import unittest
-
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import urlsplit
 
+from core.project_manager import create_project
+from core.result_status import ResultStatus
 from modules.frontend_scanner import (
     ScannerConfig,
     inspect_homepage,
 )
-from core.result_status import ResultStatus
 
 
 class TestHomepageInspection(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.hits = {
@@ -26,15 +26,12 @@ class TestHomepageInspection(unittest.TestCase):
         def make_handler(server_name, redirect_target=None):
 
             class LocalHandler(BaseHTTPRequestHandler):
-
                 def do_GET(self):
                     path = urlsplit(self.path).path
 
                     with TestHomepageInspection.hits_lock:
                         hits = TestHomepageInspection.hits
-                        hits[server_name][path] = (
-                            hits[server_name].get(path, 0) + 1
-                        )
+                        hits[server_name][path] = hits[server_name].get(path, 0) + 1
 
                     if path == "/redirect-external":
                         self.send_response(302)
@@ -64,7 +61,7 @@ class TestHomepageInspection(unittest.TestCase):
                         self.end_headers()
                         self.wfile.write(b"Internal Server Error")
                         return
-                                        
+
                     if path == "/bad-gateway":
                         self.send_response(502)
                         self.send_header(
@@ -132,18 +129,14 @@ class TestHomepageInspection(unittest.TestCase):
             make_handler("external"),
         )
 
-        cls.external_origin = (
-            f"http://127.0.0.1:{cls.external_server.server_port}"
-        )
+        cls.external_origin = f"http://127.0.0.1:{cls.external_server.server_port}"
 
         cls.main_server = ThreadingHTTPServer(
             ("127.0.0.1", 0),
             make_handler("main", cls.external_origin),
         )
 
-        cls.main_origin = (
-            f"http://127.0.0.1:{cls.main_server.server_port}"
-        )
+        cls.main_origin = f"http://127.0.0.1:{cls.main_server.server_port}"
 
         cls.external_thread = threading.Thread(
             target=cls.external_server.serve_forever,
@@ -175,7 +168,30 @@ class TestHomepageInspection(unittest.TestCase):
             self.hits["external"].clear()
 
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.project_dir = Path(self.temp_dir.name)
+        self.addCleanup(self.temp_dir.cleanup)
+
+        self.projects_root = Path(self.temp_dir.name) / "projects"
+
+        project_manager_patch = patch(
+            "core.project_manager.PROJECTS_DIR",
+            self.projects_root,
+        )
+        evidence_manager_patch = patch(
+            "core.evidence_manager.PROJECTS_DIR",
+            self.projects_root,
+        )
+
+        project_manager_patch.start()
+        self.addCleanup(project_manager_patch.stop)
+
+        evidence_manager_patch.start()
+        self.addCleanup(evidence_manager_patch.stop)
+
+        self.project_dir = create_project(
+            project_id="HOMEPAGE_TEST",
+            project_name="Homepage Inspection Test",
+            base_url=self.main_origin,
+        )
 
         self.config = ScannerConfig(
             project_id="HOMEPAGE_TEST",
@@ -215,7 +231,7 @@ class TestHomepageInspection(unittest.TestCase):
 
         self.assertEqual(
             result.screenshot_path.parent,
-            self.project_dir / "evidence" / "screenshots",
+            (self.project_dir / "evidence" / "screenshots").resolve(),
         )
 
     def test_waf_block_page_with_http_200(self):
@@ -332,7 +348,7 @@ class TestHomepageInspection(unittest.TestCase):
             "Origin returned an unknown error",
             result.response_preview,
         )
-    
+
     def test_external_redirect_is_blocked(self):
         config = ScannerConfig(
             project_id="HOMEPAGE_TEST",
@@ -350,6 +366,10 @@ class TestHomepageInspection(unittest.TestCase):
         self.assertEqual(
             result.status,
             ResultStatus.BLOCKED,
+        )
+        self.assertIsNone(
+            result.screenshot_path,
+            "Navigasi yang diblokir tidak boleh menghasilkan evidence screenshot.",
         )
 
         self.assertEqual(

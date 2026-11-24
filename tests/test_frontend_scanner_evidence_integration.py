@@ -16,8 +16,11 @@ class FrontendScannerEvidenceIntegrationTests(unittest.TestCase):
     def test_registers_homepage_screenshot_metadata(self):
         with patch.object(frontend_scanner, "register_evidence") as register:
             result = frontend_scanner._register_screenshot_evidence(
-                "PROJECT_HOME", self.screenshot, "https://example.test/",
-                "Example Home", {"inspection": "frontend_homepage"},
+                "PROJECT_HOME",
+                self.screenshot,
+                "https://example.test/",
+                "Example Home",
+                {"inspection": "frontend_homepage"},
             )
         self.assertTrue(result)
         register.assert_called_once()
@@ -31,20 +34,35 @@ class FrontendScannerEvidenceIntegrationTests(unittest.TestCase):
         self.assertEqual(kwargs["metadata"], {"inspection": "frontend_homepage"})
 
     def test_registration_failure_is_non_fatal(self):
-        with patch.object(
-            frontend_scanner, "register_evidence",
+        with patch(
+            "modules.frontend_scanner.register_evidence",
             side_effect=OSError("sensitive internal detail"),
         ):
-            result = frontend_scanner._register_screenshot_evidence(
-                "PROJECT_HOME", self.screenshot, "https://example.test/",
-                "Example Home",
-            )
+            with self.assertLogs(
+                "modules.frontend_scanner",
+                level="WARNING",
+            ) as captured:
+                result = frontend_scanner._register_screenshot_evidence(
+                    project_id="TEST_PROJECT",
+                    screenshot_path="screenshot.png",
+                    page_url="http://example.test",
+                    title="Homepage",
+                )
+
         self.assertFalse(result)
+        self.assertIn("OSError", "\n".join(captured.output))
+        self.assertNotIn(
+            "sensitive internal detail",
+            "\n".join(captured.output),
+        )
 
     def test_empty_title_and_metadata_use_safe_defaults(self):
         with patch.object(frontend_scanner, "register_evidence") as register:
             result = frontend_scanner._register_screenshot_evidence(
-                "PROJECT_HOME", self.screenshot, "https://example.test/", None,
+                "PROJECT_HOME",
+                self.screenshot,
+                "https://example.test/",
+                None,
             )
         self.assertTrue(result)
         kwargs = register.call_args.kwargs

@@ -10,6 +10,13 @@ from playwright.sync_api import (
 from core.playwright_request_guard import PlaywrightRequestGuard
 from core.request_safety import RequestSafetyController
 from core.result_status import ResultStatus
+from core.access_classification import (
+    AccessClassification,
+    classify_access_restriction,
+)
+from core.progress_tracking import (
+    emit_progress, result_outcome_labels, terminal_status_for_results,
+)
 
 
 @dataclass(frozen=True)
@@ -19,6 +26,7 @@ class AuthenticationPageResult:
     status: ResultStatus
     signals: dict
     message: str
+    access_classification: AccessClassification | None = None
 
 
 @dataclass(frozen=True)
@@ -127,7 +135,54 @@ def _inspect_auth_dom(page):
     }""")
 
 
-def inspect_authentication(config, discovery_result, timeout_ms=30000):
+def inspect_authentication(
+    config, discovery_result, timeout_ms=30000, controller=None, progress=None,
+):
+    emit_progress(
+        progress, "Authentication Discovery", "waiting",
+        "Menunggu Authentication Discovery.",
+    )
+    emit_progress(
+        progress, "Authentication Discovery", "running",
+        "Menyiapkan halaman PASSED; deteksi bersifat read-only.",
+    )
+    try:
+        result = _inspect_authentication_impl(
+            config, discovery_result, timeout_ms=timeout_ms,
+            controller=controller, progress=progress,
+        )
+    except Exception:
+        emit_progress(
+            progress, "Authentication Discovery", "failed",
+            "Authentication Discovery gagal sebelum selesai.",
+        )
+        raise
+
+    terminal = terminal_status_for_results(
+        [result.status, *(item.status for item in result.pages)]
+    )
+    outcomes = result_outcome_labels(
+        [result.status, *(item.status for item in result.pages)]
+    )
+    total_pages = (
+        0 if discovery_result.status == ResultStatus.ACCESS_RESTRICTED else
+        sum(item.status == ResultStatus.PASSED for item in discovery_result.pages)
+    )
+    emit_progress(
+        progress, "Authentication Discovery", terminal,
+        "Authentication Discovery (pemeriksaan read-only) selesai diproses; hasil QA: "
+        f"{result.status.value}"
+        f"{'; hasil halaman: ' + outcomes if outcomes else ''}; "
+        f"klasifikasi: {result.classification}; "
+        f"halaman diperiksa: {len(result.pages)}.",
+        len(result.pages), total_pages,
+    )
+    return result
+
+
+def _inspect_authentication_impl(
+    config, discovery_result, timeout_ms=30000, controller=None, progress=None,
+):
     """Deteksi indikasi login secara read-only pada halaman Discovery PASSED."""
     if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int):
         raise ValueError("timeout_ms harus berupa bilangan bulat.")
@@ -167,7 +222,7 @@ def inspect_authentication(config, discovery_result, timeout_ms=30000):
             message="Tidak ada halaman yang memenuhi syarat untuk diperiksa.",
         )
 
-    controller = RequestSafetyController(
+    controller = controller or RequestSafetyController(
         config.max_requests_per_minute,
         config.stop_after_consecutive_403,
     )
@@ -186,6 +241,11 @@ def inspect_authentication(config, discovery_result, timeout_ms=30000):
         page = context.new_page()
         try:
             for discovered in candidates:
+                emit_progress(
+                    progress, "Authentication Discovery", "running",
+                    "Memeriksa sinyal autentikasi tanpa interaksi login.",
+                    len(results) + 1, len(candidates),
+                )
                 if controller.is_stopped:
                     stopped_reason = controller.stop_reason or (
                         "Inspeksi dihentikan oleh kontrol keamanan."
@@ -202,6 +262,7 @@ def inspect_authentication(config, discovery_result, timeout_ms=30000):
                 status = ResultStatus.INCONCLUSIVE
                 signals = {}
                 message = ""
+                access_classification = AccessClassification(False, "NONE")
                 try:
                     response = page.goto(
                         discovered.url,
@@ -211,10 +272,20 @@ def inspect_authentication(config, discovery_result, timeout_ms=30000):
                     if response is not None:
                         http_status = response.status
 
-                    if controller.is_stopped or http_status in (401, 403):
+                    try:
+                        title = page.title()
+                        body_text = page.locator("body").inner_text(timeout=3000)
+                    except PlaywrightError:
+                        title, body_text = "", ""
+                    access_classification = classify_access_restriction(
+                        http_status, title, body_text
+                    )
+
+                    if controller.is_stopped or access_classification.restricted:
                         status = ResultStatus.ACCESS_RESTRICTED
                         message = controller.stop_reason or (
-                            f"Akses dibatasi (HTTP {http_status})."
+                            "Akses dibatasi; klasifikasi: "
+                            f"{access_classification.classification}."
                         )
                     elif http_status is not None and http_status >= 400:
                         status = ResultStatus.FAILED
@@ -230,8 +301,14 @@ def inspect_authentication(config, discovery_result, timeout_ms=30000):
                         status = ResultStatus.PASSED
                         message = "Sinyal autentikasi diperiksa secara read-only."
                 except PlaywrightTimeoutError:
-                    status = ResultStatus.TIMEOUT
-                    message = "Waktu tunggu halaman habis."
+                    if controller.is_stopped:
+                        status = ResultStatus.ACCESS_RESTRICTED
+                        message = controller.stop_reason or (
+                            "Inspeksi dihentikan demi keamanan."
+                        )
+                    else:
+                        status = ResultStatus.TIMEOUT
+                        message = "Waktu tunggu halaman habis."
                 except PlaywrightError as error:
                     status = (
                         ResultStatus.ACCESS_RESTRICTED
@@ -242,7 +319,8 @@ def inspect_authentication(config, discovery_result, timeout_ms=30000):
                     )
 
                 results.append(AuthenticationPageResult(
-                    discovered.url, http_status, status, signals, message
+                    discovered.url, http_status, status, signals, message,
+                    access_classification,
                 ))
                 if status == ResultStatus.ACCESS_RESTRICTED:
                     stopped_reason = message
@@ -253,6 +331,7 @@ def inspect_authentication(config, discovery_result, timeout_ms=30000):
                     )
                     break
         finally:
+            guard.begin_shutdown()
             context.close()
             browser.close()
 
