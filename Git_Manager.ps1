@@ -51,6 +51,7 @@ function Get-BackupPaths {
         ".gitignore",
         "requirements.txt",
         "run_ai_qa_assistant.ps1",
+        "Install_AI_QA_Assistant.ps1",
         "Git_Manager.ps1"
     )
 
@@ -210,31 +211,87 @@ function Invoke-Restore {
     Write-Host "Push tidak dilakukan otomatis setelah restore."
 }
 
+function Invoke-Install {
+    $InstallerPath = Join-Path $script:RepoRoot "Install_AI_QA_Assistant.ps1"
+
+    if (-not (Test-Path -LiteralPath $InstallerPath)) {
+        throw "Installer tidak ditemukan: $InstallerPath"
+    }
+
+    Write-Section "INSTALL / PERIKSA INSTALASI"
+
+    $DefaultDataRoot = Join-Path $env:USERPROFILE "AI_QA_Assistant_Data"
+    $RequestedDataRoot = Read-Host "Lokasi data eksternal (Enter untuk default: $DefaultDataRoot)"
+
+    if ([string]::IsNullOrWhiteSpace($RequestedDataRoot)) {
+        $RequestedDataRoot = $DefaultDataRoot
+    }
+
+    if (-not [System.IO.Path]::IsPathRooted($RequestedDataRoot)) {
+        throw "Lokasi data harus menggunakan absolute path."
+    }
+
+    $RequestedDataRoot = [System.IO.Path]::GetFullPath($RequestedDataRoot)
+
+    $RegressionChoice = Read-Host "Jalankan full regression test? (Y/n)"
+    $RunRegression = ($RegressionChoice -notmatch '^(n|no)$')
+
+    $InstallerParameters = @{
+        DataRoot = $RequestedDataRoot
+    }
+
+    if ($RunRegression) {
+        $InstallerParameters["RunRegression"] = $true
+    }
+
+    Write-Host "`nApplication : $script:RepoRoot"
+    Write-Host "Data        : $RequestedDataRoot"
+    Write-Host "Regression  : $RunRegression"
+
+    Remove-Variable AIQAInstallerExitCode -Scope Global -ErrorAction SilentlyContinue
+
+    & $InstallerPath @InstallerParameters
+
+    if (-not (Test-Path Variable:global:AIQAInstallerExitCode)) {
+        throw "Installer tidak mengembalikan status."
+    }
+
+    $InstallerStatus = [int]$global:AIQAInstallerExitCode
+    Remove-Variable AIQAInstallerExitCode -Scope Global -ErrorAction SilentlyContinue
+
+    if ($InstallerStatus -ne 0) {
+        throw "Instalasi gagal. Status: $InstallerStatus"
+    }
+
+    Write-Host "`nInstaller selesai dengan sukses." -ForegroundColor Green
+}
 try {
     Test-GitRepository
     while ($true) {
         Write-Section "AI QA ASSISTANT - GIT MANAGER"
         Write-Host "Repository : $script:RepoRoot"
         Write-Host "Branch     : $((& git branch --show-current).Trim())"
-        Write-Host "`n1. Backup (Commit)"
-        Write-Host "2. Backup + Push ke GitHub"
-        Write-Host "3. Restore dari Commit"
-        Write-Host "4. Lihat Riwayat Backup"
-        Write-Host "5. Periksa Git Status"
-        Write-Host "6. Keluar`n"
+        Write-Host "`n1. Install / Periksa Instalasi"
+        Write-Host "2. Backup (Commit)"
+        Write-Host "3. Backup + Push ke GitHub"
+        Write-Host "4. Restore dari Commit"
+        Write-Host "5. Lihat Riwayat Backup"
+        Write-Host "6. Periksa Git Status"
+        Write-Host "7. Keluar`n"
         $choice = Read-Host "Pilih menu"
         try {
             switch ($choice) {
-                "1" { Invoke-Backup }
-                "2" { Invoke-Backup -PushAfterCommit }
-                "3" { Invoke-Restore }
-                "4" { Show-CommitHistory }
-                "5" { Show-GitStatus }
-                "6" { Write-Host "Git Manager ditutup."; return }
+                "1" { Invoke-Install }
+                "2" { Invoke-Backup }
+                "3" { Invoke-Backup -PushAfterCommit }
+                "4" { Invoke-Restore }
+                "5" { Show-CommitHistory }
+                "6" { Show-GitStatus }
+                "7" { Write-Host "Git Manager ditutup."; return }
                 default { Write-Host "Pilihan tidak valid." -ForegroundColor Yellow }
             }
         } catch { Write-Host "`n[ERROR] $($_.Exception.Message)" -ForegroundColor Red }
-        if ($choice -ne "6") { [void](Read-Host "Tekan Enter untuk kembali ke menu") }
+        if ($choice -ne "7") { [void](Read-Host "Tekan Enter untuk kembali ke menu") }
     }
 } catch {
     Write-Host "[FATAL] $($_.Exception.Message)" -ForegroundColor Red

@@ -155,3 +155,60 @@ Lokasi aktual tersebut merupakan konfigurasi perangkat ini, bukan lokasi wajib u
 ### Batasan
 
 Migrasi ini baru mencakup `projects/` dan `logs/`. Namespace `client_id`, isolasi multi-klien, dan pemindahan kategori data lain belum selesai. Lakukan backup sebelum perubahan besar dan jangan menghapus data sumber lama sebelum seluruh proses pemulihan diverifikasi.
+
+## Installer and Git Manager
+
+### Installer
+
+For a fresh Windows installation, run the installer from the application root using PowerShell 7:
+
+    .\Install_AI_QA_Assistant.ps1
+
+The installer performs these tasks:
+
+- Checks the required application files and Python 3.14 64-bit runtime.
+- Creates a local .venv-scanner when it does not exist.
+- Reuses an existing compatible .venv-scanner.
+- Installs dependencies from requirements.txt.
+- Installs or verifies Playwright Chromium.
+- Creates the external data directory and its projects and logs subdirectories when missing.
+- Checks dependency imports and required application files.
+- Optionally runs the full regression test suite.
+
+The default external data directory is:
+
+    %USERPROFILE%\AI_QA_Assistant_Data
+
+To select another absolute data directory:
+
+    .\Install_AI_QA_Assistant.ps1 -DataRoot 'D:\AI_QA_Assistant_Data'
+
+To run the full regression test:
+
+    .\Install_AI_QA_Assistant.ps1 -RunRegression
+
+Both options can be combined:
+
+    .\Install_AI_QA_Assistant.ps1 -DataRoot 'D:\AI_QA_Assistant_Data' -RunRegression
+
+Existing project and log directories are preserved. Virtual environments must be created locally on each computer and must not be copied between computers.
+
+### Git Manager
+
+Run the repository maintenance menu:
+
+    .\Git_Manager.ps1
+
+The menu provides:
+
+1. Install / Check Installation
+2. Backup (Commit)
+3. Backup + Push
+4. Restore from Commit
+5. Commit History
+6. Git Status
+7. Exit
+
+The installation option invokes Install_AI_QA_Assistant.ps1 and allows the operator to select the external data directory and whether to run the full regression test suite.
+
+Review Git status and changes before committing or pushing source updates. Do not include external project data, reports, evidence, logs, backups, or virtual environments in source commits.
