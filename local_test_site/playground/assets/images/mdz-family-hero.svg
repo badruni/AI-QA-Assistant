@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+<title id="title">The MyDreamZone Racing Family</title>
+<desc id="desc">Ilustrasi orisinal enam anggota keluarga tim balap di depan mobil sport oranye di dalam garasi.</desc>
+<defs>
+ <linearGradient id="bg" x2="0" y2="1"><stop stop-color="#202833"/><stop offset="1" stop-color="#080a0e"/></linearGradient>
+ <linearGradient id="orange" x2="0.9" y2="1"><stop stop-color="#ffb13b"/><stop offset=".55" stop-color="#ff7900"/><stop offset="1" stop-color="#a93600"/></linearGradient>
+ <linearGradient id="glass" x2="0" y2="1"><stop stop-color="#8bc9e8"/><stop offset="1" stop-color="#172c42"/></linearGradient>
+ <linearGradient id="suit" x2="1" y2="1"><stop stop-color="#343b46"/><stop offset="1" stop-color="#11151c"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="24"/></filter>
+</defs>
+<rect width="1200" height="650" fill="url(#bg)"/>
+<path d="M0 95H1200M0 190H1200M0 285H1200M0 380H1200M0 475H1200" stroke="#ff8a00" stroke-opacity=".15" stroke-width="3"/>
+<path d="M70 0L0 650M360 0L180 650M650 0L480 650M940 0L770 650M1200 0L1050 650" stroke="#8b9aaa" stroke-opacity=".12" stroke-width="4"/>
+<circle cx="920" cy="180" r="150" fill="#ff8a00" opacity=".2" filter="url(#glow)"/>
+<path d="M0 535H1200" stroke="#ff8a00" stroke-width="5" opacity=".7"/>
+<!-- sports car -->
+<ellipse cx="570" cy="535" rx="420" ry="36" fill="#000" opacity=".7"/>
+<path d="M155 475Q205 405 340 390L485 325Q545 292 675 310L790 385Q915 390 1005 455L1040 500Q1025 525 970 530H210Q145 520 155 475Z" fill="url(#orange)" stroke="#ffc16b" stroke-width="7"/>
+<path d="M390 388L500 330Q555 310 665 328L755 388Z" fill="url(#glass)" stroke="#252b33" stroke-width="12"/>
+<path d="M555 326L550 387M675 330L700 388" stroke="#222832" stroke-width="10"/>
+<path d="M185 470Q290 442 400 445H900Q985 450 1020 475" fill="none" stroke="#242932" stroke-width="14"/>
+<path d="M205 492H315M850 492H985" stroke="#fff2d9" stroke-width="13" stroke-linecap="round"/>
+<circle cx="335" cy="520" r="63" fill="#090b0f" stroke="#707985" stroke-width="12"/><circle cx="335" cy="520" r="28" fill="#ff8a00" stroke="#d9dce0" stroke-width="8"/>
+<circle cx="870" cy="520" r="63" fill="#090b0f" stroke="#707985" stroke-width="12"/><circle cx="870" cy="520" r="28" fill="#ff8a00" stroke="#d9dce0" stroke-width="8"/>
+<text x="580" y="468" text-anchor="middle" font-family="Arial,sans-serif" font-size="34" font-weight="900" font-style="italic" fill="#15171b">MDZ RACING</text>
+<!-- family figures, intentionally stylized original vector mascots -->
+<!-- father -->
+<g transform="translate(155 65)">
+ <path d="M30 210Q5 250 0 390L175 390Q168 260 135 210Z" fill="url(#suit)" stroke="#ff8a00" stroke-width="7"/>
+ <path d="M35 250L92 295L145 250" fill="none" stroke="#ff8a00" stroke-width="12"/>
+ <rect x="55" y="178" width="75" height="45" rx="18" fill="#d99570"/>
+ <ellipse cx="92" cy="115" rx="72" ry="84" fill="#d99a78"/>
+ <path d="M20 115Q10 15 95 18Q170 22 165 112L145 76Q95 100 42 75Z" fill="#24252a"/>
+ <path d="M20 60Q90 -5 166 50L175 72H12Z" fill="#ff8a00" stroke="#1a1a1f" stroke-width="9"/>
+ <path d="M47 132Q90 160 137 132" fill="none" stroke="#603a31" stroke-width="7" stroke-linecap="round"/>
+ <text x="92" y="345" text-anchor="middle" font-family="Arial" font-size="25" font-weight="900" fill="#ff9a19">DAD</text>
+</g>
+<!-- mother -->
+<g transform="translate(345 75)">
+ <path d="M25 215Q0 265 0 390H180Q170 260 140 215Z" fill="url(#suit)" stroke="#ff8a00" stroke-width="7"/>
+ <path d="M35 245L90 295L145 245" fill="none" stroke="#ff8a00" stroke-width="12"/>
+ <rect x="55" y="180" width="75" height="45" rx="18" fill="#e7ad8d"/>
+ <ellipse cx="92" cy="120" rx="68" ry="80" fill="#e7ad8d"/>
+ <path d="M25 130Q-5 20 85 20Q170 10 166 120L145 165L132 72Q75 112 32 72Z" fill="#27222a"/>
+ <path d="M18 64Q90 -5 166 48L174 72H10Z" fill="#ff8a00" stroke="#1a1a1f" stroke-width="9"/>
+ <path d="M48 137Q90 158 135 137" fill="none" stroke="#854d43" stroke-width="6" stroke-linecap="round"/>
+ <text x="92" y="345" text-anchor="middle" font-family="Arial" font-size="25" font-weight="900" fill="#ff9a19">MOM</text>
+</g>
+<!-- daughter 1 technician -->
+<g transform="translate(570 210)">
+ <path d="M15 135Q0 175 0 290H130Q125 175 105 135Z" fill="#202630" stroke="#ff8a00" stroke-width="6"/>
+ <rect x="45" y="108" width="48" height="35" rx="12" fill="#efbd9d"/>
+ <ellipse cx="68" cy="65" rx="51" ry="59" fill="#efbd9d"/>
+ <path d="M17 70Q5 0 72 0Q130 0 121 75L100 35Q65 55 27 38Z" fill="#4a2c22"/>
+ <path d="M15 32Q70 -10 120 28L127 43H8Z" fill="#ff8a00"/>
+ <text x="65" y="250" text-anchor="middle" font-family="Arial" font-size="17" font-weight="900" fill="#ff9a19">TECH</text>
+</g>
+<!-- daughter 2 crew -->
+<g transform="translate(715 225)">
+ <path d="M10 125Q0 170 0 275H125Q120 170 100 125Z" fill="#202630" stroke="#ff8a00" stroke-width="6"/>
+ <rect x="42" y="100" width="45" height="34" rx="12" fill="#e9b28f"/>
+ <ellipse cx="65" cy="60" rx="48" ry="56" fill="#e9b28f"/>
+ <path d="M18 65Q8 0 68 0Q120 5 115 73L96 38Q60 52 24 35Z" fill="#3b2925"/>
+ <path d="M12 30Q65 -8 115 27L120 42H8Z" fill="#ff8a00"/>
+ <text x="62" y="237" text-anchor="middle" font-family="Arial" font-size="17" font-weight="900" fill="#ff9a19">CREW</text>
+</g>
+<!-- son 1 technician -->
+<g transform="translate(855 220)">
+ <path d="M10 130Q0 175 0 280H125Q120 175 100 130Z" fill="#202630" stroke="#ff8a00" stroke-width="6"/>
+ <rect x="42" y="103" width="45" height="34" rx="12" fill="#d99c79"/>
+ <ellipse cx="65" cy="62" rx="49" ry="57" fill="#d99c79"/>
+ <path d="M16 58Q12 0 68 0Q118 0 115 58L95 37Q55 50 25 32Z" fill="#29211e"/>
+ <path d="M12 30Q65 -8 115 27L120 42H8Z" fill="#ff8a00"/>
+ <text x="62" y="242" text-anchor="middle" font-family="Arial" font-size="17" font-weight="900" fill="#ff9a19">TECH</text>
+</g>
+<!-- son 2 crew -->
+<g transform="translate(995 225)">
+ <path d="M10 125Q0 170 0 275H125Q120 170 100 125Z" fill="#202630" stroke="#ff8a00" stroke-width="6"/>
+ <rect x="42" y="100" width="45" height="34" rx="12" fill="#e4aa88"/>
+ <ellipse cx="65" cy="60" rx="48" ry="56" fill="#e4aa88"/>
+ <path d="M16 60Q10 0 68 0Q118 4 115 62L96 38Q56 50 25 34Z" fill="#39271f"/>
+ <path d="M12 30Q65 -8 115 27L120 42H8Z" fill="#ff8a00"/>
+ <text x="62" y="237" text-anchor="middle" font-family="Arial" font-size="17" font-weight="900" fill="#ff9a19">CREW</text>
+</g>
+<text x="600" y="625" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="900" letter-spacing="5" fill="#ff9a19">MYDREAMZONE · FAMILY RACING TEAM</text>
+</svg>

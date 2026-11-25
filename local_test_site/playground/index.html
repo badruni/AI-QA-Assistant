@@ -1,0 +1,128 @@
+<!doctype html>
+<!-- LP-3.3.2 VISUAL REBUILD -->
+<html lang="id" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0b0e">
+<meta name="description" content="MyDreamZone — Cars, Family, Passion. Komunitas otomotif untuk keluarga dan pencinta dunia otomotif.">
+<title>MyDreamZone — Cars · Family · Passion</title>
+<link rel="icon" href="/assets/images/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/styles.css">
+<script defer src="/assets/app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn mobile-menu" id="menuOpen" aria-label="Buka menu" aria-expanded="false">☰</button>
+  <a class="brand" href="#home" aria-label="MyDreamZone Home">
+    <span class="brand-name">MyDream<span>Zone</span><i class="checkers">▰▰</i></span>
+    <small>AUTOMOTIVE · LIFESTYLE · COMMUNITY</small>
+  </a>
+  <nav class="main-nav" aria-label="Navigasi utama">
+    <a class="active" href="#home">Home</a><a href="#articles">Articles</a><a href="#events">Events</a><a href="#gallery">Gallery</a><a href="#community">Community</a>
+  </nav>
+  <div class="top-actions">
+    <button class="icon-btn search-toggle" id="searchToggle" aria-label="Cari">⌕</button>
+    <button class="icon-btn notification-toggle" id="notificationToggle" aria-label="Notifikasi">♧<i></i></button>
+    <button class="avatar-button" aria-label="Profil pengguna">R</button>
+    <button class="theme-toggle" id="themeToggle" aria-label="Ganti tema"><span>☼</span><span>☾</span></button>
+  </div>
+</header>
+
+<aside class="mobile-drawer" id="mobileDrawer" aria-label="Menu mobile">
+  <div class="drawer-head"><span class="brand-name">MyDream<span>Zone</span></span><button class="icon-btn" id="menuClose" aria-label="Tutup menu">×</button></div>
+  <a href="#home">Home</a><a href="#articles">Articles</a><a href="#events">Events</a><a href="#gallery">Gallery</a><a href="#community">Community</a>
+  <p>BUILD · TUNE · RACE · TOGETHER</p>
+</aside>
+<button class="drawer-scrim" id="drawerScrim" aria-label="Tutup menu"></button>
+
+<main id="home" class="page-shell">
+  <section class="hero" aria-label="MyDreamZone Racing Family">
+    <div class="hero-copy">
+      <div class="hero-brand">MyDream<span>Zone</span><i class="checkers">▰▰</i></div>
+      <p class="hero-tagline">CARS · FAMILY · PASSION<br>BUILD · TUNE · RACE · TOGETHER</p>
+      <p class="hero-description">Komunitas otomotif untuk keluarga dan semua pencinta dunia otomotif. Berbagi pengalaman, modifikasi, event, dan mimpi di lintasan yang sama.</p>
+      <div class="hero-buttons"><a class="btn-primary" href="#community">Join Community <b>→</b></a><button class="btn-outline" id="watchTrailer"><b>▶</b> Watch Trailer</button></div>
+    </div>
+    <div class="hero-visual" id="heroCarousel" tabindex="0" aria-label="Galeri MyDreamZone">
+      <img id="heroSlideImage" src="/assets/images/mdz-family-team.png" alt="Keluarga MyDreamZone: dua orang tua pembalap dan empat anak sebagai tim pendukung dan teknisi">
+      <div class="hero-shade"></div>
+      <button class="hero-arrow hero-arrow-prev" type="button" aria-label="Slide sebelumnya">&#10094;</button>
+      <button class="hero-arrow hero-arrow-next" type="button" aria-label="Slide berikutnya">&#10095;</button>
+      <div class="hero-dots" aria-label="Indikator carousel">
+        <button class="dot active" type="button" aria-label="Slide 1" aria-current="true"></button>
+        <button class="dot" type="button" aria-label="Slide 2" aria-current="false"></button>
+        <button class="dot" type="button" aria-label="Slide 3" aria-current="false"></button>
+        <button class="dot" type="button" aria-label="Slide 4" aria-current="false"></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="top-panels" id="events">
+    <article class="panel whats-on">
+      <div class="section-title"><h2><span class="section-icon">▣</span> What's On</h2><a href="#events">See All <b>→</b></a></div>
+      <div class="event-feature">
+        <div class="date-block"><span>FEB</span><strong>28</strong></div>
+        <div class="event-copy"><h3>MyDreamZone<br>Auto Meet 2026</h3><p><b>⌖</b> Sentul Circuit, Indonesia</p></div>
+        <img src="/assets/images/event-meet.jpg" alt="Suasana pertemuan komunitas otomotif di sirkuit">
+      </div>
+    </article>
+    <article class="panel winner-panel">
+      <div class="section-title"><h2><span class="section-icon">🏆</span> Winner Table</h2><a href="#events">See All <b>→</b></a></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>Participant</th><th>Car</th><th>Points</th></tr></thead><tbody>
+        <tr><td><b class="rank rank-1">1</b></td><td>NitroWorks</td><td>RX-7 FD</td><td>980</td></tr>
+        <tr><td><b class="rank rank-2">2</b></td><td>Kuro Garage</td><td>Supra A80</td><td>912</td></tr>
+        <tr><td><b class="rank rank-3">3</b></td><td>Drift Union</td><td>Skyline R34</td><td>887</td></tr>
+      </tbody></table></div>
+    </article>
+  </section>
+
+  <section class="panel highlights" id="articles">
+    <div class="section-title"><h2><span class="section-icon bolt">ϟ</span> Highlights</h2><a href="#articles">See All <b>→</b></a></div>
+    <div class="highlight-list">
+      <a class="highlight-card" href="#articles"><img src="/assets/images/highlight-review.jpg" alt=""><span>Car Review</span></a>
+      <a class="highlight-card" href="#articles"><img src="/assets/images/highlight-modification.jpg" alt=""><span>Modification</span></a>
+      <a class="highlight-card" href="#articles"><img src="/assets/images/highlight-motorsport.jpg" alt=""><span>Motorsport</span></a>
+      <a class="highlight-card" href="#articles"><img src="/assets/images/highlight-lifestyle.jpg" alt=""><span>Lifestyle</span></a>
+      <a class="highlight-card" href="#articles"><img src="/assets/images/highlight-garage.jpg" alt=""><span>Family Garage</span></a>
+    </div>
+  </section>
+
+  <section class="bottom-panels" id="community">
+    <article class="panel discussions">
+      <div class="section-title"><h2><span class="section-icon">●</span> Latest Discussions</h2><a href="#community">See All <b>→</b></a></div>
+      <div class="discussion-list">
+        <article class="discussion"><div class="user-avatar avatar-one">R</div><div class="discussion-copy"><h3>Setup suspensi buat harian tapi tetap nyaman?</h3><p>RakaGZ <span>· 2h ago</span></p></div><div class="discussion-stats"><span>▢ 54</span><span>◉ 2.3K</span></div></article>
+        <article class="discussion"><div class="user-avatar avatar-two">D</div><div class="discussion-copy"><h3>Rekomendasi ban untuk track day?</h3><p>DewiN <span>· 5h ago</span></p></div><div class="discussion-stats"><span>▢ 37</span><span>◉ 1.1K</span></div></article>
+        <article class="discussion"><div class="user-avatar avatar-three">B</div><div class="discussion-copy"><h3>Cara merawat rotary engine (RX-7)?</h3><p>BimaRX <span>· 1d ago</span></p></div><div class="discussion-stats"><span>▢ 89</span><span>◉ 4.8K</span></div></article>
+      </div>
+    </article>
+    <article class="panel reels">
+      <div class="section-title"><h2><span class="section-icon">▶</span> Reels</h2><a href="#gallery">See All <b>→</b></a></div>
+      <button class="reel-image media-open" data-image="/assets/images/reels-night-drive.jpg" aria-label="Buka video preview">
+        <img src="/assets/images/reels-night-drive.jpg" alt="Mobil sport oranye di jalanan kota pada malam hari"><span class="play-button">▶</span><b class="duration">00:30</b>
+      </button>
+    </article>
+    <article class="panel gallery" id="gallery">
+      <div class="section-title"><h2><span class="section-icon">▧</span> Gallery</h2><a href="#gallery">See All <b>→</b></a></div>
+      <div class="gallery-grid">
+        <button class="gallery-image media-open" data-image="/assets/images/gallery-car.jpg" aria-label="Lihat foto mobil"><img src="/assets/images/gallery-car.jpg" alt="Mobil sport oranye"></button>
+        <button class="gallery-image media-open" data-image="/assets/images/gallery-wheel.jpg" aria-label="Lihat foto velg"><img src="/assets/images/gallery-wheel.jpg" alt="Velg mobil sport"></button>
+        <button class="gallery-image media-open" data-image="/assets/images/gallery-meet.jpg" aria-label="Lihat foto event"><img src="/assets/images/gallery-meet.jpg" alt="Suasana event otomotif"><span>+12</span></button>
+      </div>
+    </article>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <a class="brand footer-brand" href="#home"><span class="brand-name">MyDream<span>Zone</span><i class="checkers">▰▰</i></span><small>AUTOMOTIVE · LIFESTYLE · COMMUNITY</small></a>
+  <div class="social-links" aria-label="Social media"><a href="#footer" aria-label="YouTube">▶</a><a href="#footer" aria-label="Instagram">◎</a><a href="#footer" aria-label="TikTok">♪</a><a href="#footer" aria-label="Facebook">f</a></div>
+  <nav class="footer-links"><a href="#footer">About</a><a href="#footer">Terms</a><a href="#footer">Privacy</a><a href="#footer">Contact</a></nav>
+  <p>© 2026 MyDreamZone. All rights reserved.</p>
+  <button class="back-top" id="backTop" aria-label="Kembali ke atas">↑</button>
+</footer>
+
+<div class="image-modal" id="imageModal" role="dialog" aria-modal="true" aria-label="Image viewer"><button id="modalClose" aria-label="Tutup">×</button><img id="modalImage" alt="Pratinjau gambar"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
