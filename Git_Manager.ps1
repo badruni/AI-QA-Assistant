@@ -63,17 +63,6 @@ function Get-BackupPaths {
         }
     }
 
-    # Sertakan hanya batch scripts yang sudah dilacak Git.
-    # File ZIP, patch, dan file baru tidak otomatis dimasukkan.
-    $trackedBatchScripts = @(
-        git -C $script:RepoRoot ls-files -- "batch_scripts/*"
-    )
-
-    foreach ($path in $trackedBatchScripts) {
-        if (Test-Path -LiteralPath (Join-Path $script:RepoRoot $path)) {
-            $path
-        }
-    }
 }
 
 function Invoke-PushPendingCommits {
@@ -134,6 +123,12 @@ function Invoke-Backup {
     if ($paths.Count -eq 0) { throw "Tidak ada path allowlist yang tersedia." }
 
     Invoke-Git -GitArgs (@("add", "--") + $paths) | Out-Null
+
+    # Stage hanya penghapusan batch scripts yang sebelumnya dilacak Git.
+    $deletedBatchScripts = @(git diff --name-only --diff-filter=D -- "batch_scripts/")
+    if ($deletedBatchScripts.Count -gt 0) {
+        Invoke-Git -GitArgs @("add", "-u", "--", "batch_scripts/") | Out-Null
+    }
     Write-Section "FILE YANG AKAN DI-COMMIT"
     Invoke-Git -GitArgs @("diff", "--cached", "--name-status") | Out-Null
 

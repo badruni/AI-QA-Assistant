@@ -39,3 +39,5 @@ Thumbs.db
 /log.txt
 /debug.log
 /DEPENDENCY_IMPORT_AUDIT.txt
+# Local development batch scripts are archived outside this repository.
+/batch_scripts/
