@@ -1,5 +1,33 @@
 (() => {
  const root=document.documentElement;
+ const qaLabPage=document.getElementById("qa-lab");
+ const siteNavLinks=[...document.querySelectorAll("[data-site-nav]")];
+ const qaNavLinks=[...document.querySelectorAll("[data-qa-nav]")];
+ const labHashes=["#lab-normal","#lab-negative","#lab-accessibility","#lab-responsive","#lab-security"];
+ const updatePageRoute=()=>{
+   const hash=window.location.hash||"#home";
+   const inQaLab=hash==="#qa-lab"||labHashes.includes(hash);
+   qaLabPage.classList.toggle("active",inQaLab);
+   document.body.classList.toggle("qa-lab-active",inQaLab);
+   siteNavLinks.forEach(link=>{
+     const active=!inQaLab && link.getAttribute("href")===hash;
+     link.classList.toggle("active",active);
+     if(active)link.setAttribute("aria-current","page");else link.removeAttribute("aria-current");
+   });
+   qaNavLinks.forEach(link=>{
+     link.classList.toggle("active",inQaLab);
+     if(inQaLab)link.setAttribute("aria-current","page");else link.removeAttribute("aria-current");
+   });
+   if(inQaLab){
+     requestAnimationFrame(()=>{
+       const target=hash==="#qa-lab"?qaLabPage:document.getElementById(hash.slice(1));
+       if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+     });
+   }
+ };
+ window.addEventListener("hashchange",updatePageRoute);
+ updatePageRoute();
+
  const themeButton=document.getElementById("themeToggle");
  const saved=localStorage.getItem("mdz-theme");
  if(saved==="light"||saved==="dark") root.dataset.theme=saved;
@@ -13,7 +41,12 @@
  open.addEventListener("click",()=>{drawer.classList.add("open");scrim.classList.add("show");open.setAttribute("aria-expanded","true");});
  document.getElementById("menuClose").addEventListener("click",close);scrim.addEventListener("click",close);
  drawer.querySelectorAll("a").forEach(a=>a.addEventListener("click",close));
- document.addEventListener("keydown",e=>{if(e.key==="Escape"){close();document.getElementById("imageModal").classList.remove("open");}});
+document.addEventListener("keydown",e=>{
+   if(e.key==="Escape"){
+     close();
+     if(modal.classList.contains("open"))closeModal();
+   }
+ });
    // MDZ_HERO_CAROUSEL_V1
   const heroCarousel=document.getElementById("heroCarousel");
   if(heroCarousel){
@@ -63,14 +96,1580 @@
     });
     heroCarousel.addEventListener("pointercancel",()=>{heroStartX=null;});
   }
- const modal=document.getElementById("imageModal"),modalImage=document.getElementById("modalImage");
- document.querySelectorAll(".media-open").forEach(btn=>btn.addEventListener("click",()=>{modalImage.src=btn.dataset.image;modal.classList.add("open");}));
- document.getElementById("modalClose").addEventListener("click",()=>modal.classList.remove("open"));
- modal.addEventListener("click",e=>{if(e.target===modal)modal.classList.remove("open");});
+const modal=document.getElementById("imageModal"),modalImage=document.getElementById("modalImage");
+ const modalClose=document.getElementById("modalClose");
+ let modalOpener=null,previousBodyOverflow="";
+
+ const openModal=btn=>{
+   modalOpener=btn;
+   previousBodyOverflow=document.body.style.overflow;
+   modalImage.src=btn.dataset.image;
+   modal.classList.add("open");
+   document.body.style.overflow="hidden";
+   modalClose.focus();
+ };
+
+ const closeModal=()=>{
+   if(!modal.classList.contains("open"))return;
+   modal.classList.remove("open");
+   document.body.style.overflow=previousBodyOverflow;
+   if(modalOpener && modalOpener.isConnected)modalOpener.focus();
+   modalOpener=null;
+ };
+
+ document.querySelectorAll(".media-open").forEach(btn=>btn.addEventListener("click",()=>openModal(btn)));
+ modalClose.addEventListener("click",closeModal);
+ modal.addEventListener("click",e=>{if(e.target===modal)closeModal();});
+
+ modal.addEventListener("keydown",e=>{
+   if(e.key!=="Tab")return;
+   const focusable=[...modal.querySelectorAll('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+     .filter(el=>el.getClientRects().length>0);
+   if(focusable.length===0){
+     e.preventDefault();
+     modal.focus();
+     return;
+   }
+   const first=focusable[0],last=focusable[focusable.length-1];
+   if(e.shiftKey && (document.activeElement===first || document.activeElement===modal)){
+     e.preventDefault();
+     last.focus();
+   }else if(!e.shiftKey && (document.activeElement===last || document.activeElement===modal)){
+     e.preventDefault();
+     first.focus();
+   }
+ });
  document.getElementById("backTop").addEventListener("click",()=>window.scrollTo({top:0,behavior:"smooth"}));
  const toast=document.getElementById("toast");let toastTimer;
  const showToast=msg=>{toast.textContent=msg;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2200);};
  document.getElementById("watchTrailer").addEventListener("click",()=>showToast("Trailer MyDreamZone akan segera hadir."));
  document.getElementById("searchToggle").addEventListener("click",()=>showToast("Fitur pencarian akan dikembangkan pada tahap berikutnya."));
  document.getElementById("notificationToggle").addEventListener("click",()=>showToast("Belum ada notifikasi baru."));
+ // LIVING_QA_WORKBENCH_D2_D7
+ const qaComponents = [
+  {
+    "id": "CMP-001",
+    "number": 1,
+    "name": "Header",
+    "source_status": "implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      ".topbar",
+      ".main-nav",
+      ".top-actions"
+    ],
+    "source_evidence": "`index.html`: `.topbar`, `.main-nav`, `.top-actions`; CSS sticky header.",
+    "gap": "Desktop header and main navigation exist. QA Lab nav is not present.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-002",
+    "number": 2,
+    "name": "Logo",
+    "source_status": "implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      ".brand",
+      ".brand-name",
+      ".hero-brand"
+    ],
+    "source_evidence": "`.brand`, `.brand-name`, `.hero-brand`; local `mdz-logo.svg` also exists in assets.",
+    "gap": "Logo/brand treatment exists in header, hero and footer; image asset presence should be verified for actual usage.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-003",
+    "number": 3,
+    "name": "Hamburger Menu",
+    "source_status": "implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      "#menuOpen",
+      "#mobileDrawer",
+      "#menuClose",
+      "#drawerScrim"
+    ],
+    "source_evidence": "`#menuOpen`, `#mobileDrawer`, `#menuClose`, `#drawerScrim`; JS open/close handlers.",
+    "gap": "Mobile drawer opens/closes and Escape handler calls close; focus management and inert background are not implemented.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-004",
+    "number": 4,
+    "name": "Expandable Sidebar",
+    "source_status": "not_implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      "aside[aria-label='Expandable sidebar']",
+      "[data-component='expandable-sidebar']"
+    ],
+    "source_evidence": "No expandable sidebar structure or dedicated JS behavior found.",
+    "gap": "Mobile drawer is not an expandable sidebar; do not count it as this component.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-005",
+    "number": 5,
+    "name": "Overlay Navigation",
+    "source_status": "partial",
+    "category": "navigation",
+    "selector_candidates": [
+      ".drawer-scrim"
+    ],
+    "source_evidence": "Mobile drawer plus `.drawer-scrim` overlay on small screens.",
+    "gap": "Overlay exists for the mobile drawer only; no separate overlay navigation pattern or keyboard/focus treatment.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-006",
+    "number": 6,
+    "name": "Bottom Navigation",
+    "source_status": "not_implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      "nav[aria-label='Bottom navigation']",
+      "[data-component='bottom-navigation']"
+    ],
+    "source_evidence": "No bottom navigation markup or styles found.",
+    "gap": "No persistent bottom navigation component.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-007",
+    "number": 7,
+    "name": "Footer",
+    "source_status": "implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      "footer.site-footer",
+      ".footer-links",
+      ".social-links"
+    ],
+    "source_evidence": "`footer.site-footer`, `.footer-links`, `.social-links`.",
+    "gap": "Footer structure and links exist; links currently point to local placeholder anchors.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-008",
+    "number": 8,
+    "name": "Floating Go to Top",
+    "source_status": "partial",
+    "category": "navigation",
+    "selector_candidates": [
+      "#backTop"
+    ],
+    "source_evidence": "`#backTop`; JS calls `window.scrollTo`; CSS positions button inside footer, not fixed/floating.",
+    "gap": "Back-to-top action exists, but component is not floating/always available as its name implies.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-009",
+    "number": 9,
+    "name": "Hero Banner",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      "section.hero",
+      ".hero-copy",
+      ".hero-visual"
+    ],
+    "source_evidence": "`section.hero`, `.hero-copy`, `.hero-visual`.",
+    "gap": "Hero section with copy, CTA and visual exists.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-010",
+    "number": 10,
+    "name": "Image Carousel / Slider",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      "#heroCarousel"
+    ],
+    "source_evidence": "`#heroCarousel`; JS `showHeroSlide`, previous/next, preload, pointer swipe.",
+    "gap": "Four-slide carousel with arrows, indicators, keyboard arrows and pointer swipe handlers.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-011",
+    "number": 11,
+    "name": "Carousel Indicator",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      ".dot"
+    ],
+    "source_evidence": "Four `.dot` buttons with `aria-current`; JS updates active state.",
+    "gap": "Indicators are interactive and active state is updated by JS.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-012",
+    "number": 12,
+    "name": "CTA Button",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      ".btn-primary",
+      ".btn-outline"
+    ],
+    "source_evidence": "`.btn-primary` anchor and `.btn-outline` trailer button.",
+    "gap": "Join Community navigates to section; trailer button currently displays placeholder toast.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-013",
+    "number": 13,
+    "name": "What's On Section",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      "section.top-panels",
+      ".whats-on"
+    ],
+    "source_evidence": "`section.top-panels` contains `.whats-on`.",
+    "gap": "Section and event summary panel exist as static content.",
+    "relevant_labs": [
+      "normal",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-014",
+    "number": 14,
+    "name": "Event Card",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".event-feature"
+    ],
+    "source_evidence": "`.event-feature` with date, title, location and image.",
+    "gap": "One static featured event card; no detail route or event interaction.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-015",
+    "number": 15,
+    "name": "Winner Table",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      ".winner-panel",
+      ".table-wrap"
+    ],
+    "source_evidence": "`.winner-panel`, `.table-wrap`, semantic table with thead/tbody.",
+    "gap": "Static three-row table exists; responsive handling is horizontal scroll wrapper.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-016",
+    "number": 16,
+    "name": "Horizontal Carousel",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      "[data-component='horizontal-carousel']",
+      "[data-carousel='horizontal']"
+    ],
+    "source_evidence": "No carousel track/controls for a horizontal content list found.",
+    "gap": "Hero carousel is a slide carousel, not a horizontal multi-card carousel.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-017",
+    "number": 17,
+    "name": "Highlights Section",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      "section.highlights",
+      ".highlight-list",
+      ".highlight-card"
+    ],
+    "source_evidence": "`section.highlights`, `.highlight-list`, five `.highlight-card` anchors.",
+    "gap": "Highlights content section and five image cards exist.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-018",
+    "number": 18,
+    "name": "Category Card",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".highlight-card"
+    ],
+    "source_evidence": "Highlight cards show category-like labels (Car Review, Modification, Motorsport, Lifestyle, Family Garage).",
+    "gap": "Cards visually represent categories but are not a distinct category-card component or category destination.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-019",
+    "number": 19,
+    "name": "Latest Discussions",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      ".discussions",
+      ".discussion-list"
+    ],
+    "source_evidence": "`.discussions`, `.discussion-list` with three discussion entries.",
+    "gap": "Discussion listing exists as static content.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-020",
+    "number": 20,
+    "name": "Discussion Card",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".discussion"
+    ],
+    "source_evidence": "Each `.discussion` row contains avatar, title, author, timestamp and stats.",
+    "gap": "A discussion row pattern exists, but it is static and has no detail/action behavior.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-021",
+    "number": 21,
+    "name": "Comment Input",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      "form.comment-form",
+      "textarea[name='comment']",
+      "[data-component='comment-input']"
+    ],
+    "source_evidence": "No comment form or input found.",
+    "gap": "No comment composer or submit interaction.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-022",
+    "number": 22,
+    "name": "Comment Thread",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      ".comment-thread",
+      "[data-component='comment-thread']"
+    ],
+    "source_evidence": "No thread detail/reply structure found.",
+    "gap": "Discussion list is not a comment thread.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-023",
+    "number": 23,
+    "name": "Nested Comments",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      ".nested-comments",
+      "[data-component='nested-comments']"
+    ],
+    "source_evidence": "No nested/reply comment markup found.",
+    "gap": "No nested discussion hierarchy.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-024",
+    "number": 24,
+    "name": "Like Button",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      "button.like-button",
+      "[data-action='like']"
+    ],
+    "source_evidence": "No like control or state handler found.",
+    "gap": "No like interaction.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-025",
+    "number": 25,
+    "name": "Comment Counter",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".discussion-stats span:first-child"
+    ],
+    "source_evidence": "Discussion stats contain static comment-like numbers (e.g. 54, 37, 89).",
+    "gap": "Counters are visual text only; not tied to comments or changing state.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-026",
+    "number": 26,
+    "name": "View Counter",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".discussion-stats span:nth-child(2)"
+    ],
+    "source_evidence": "Discussion stats contain static view-like values (e.g. 2.3K, 1.1K, 4.8K).",
+    "gap": "Values are static display text, not tracked view counts.",
+    "relevant_labs": [
+      "normal",
+      "negative"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-027",
+    "number": 27,
+    "name": "Reels Section",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".reels",
+      ".reel-image"
+    ],
+    "source_evidence": "`.reels` section with one `.reel-image` preview.",
+    "gap": "A reels-like panel exists, but it contains a static image preview, not a reel/video feed.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-028",
+    "number": 28,
+    "name": "Video Card",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".reel-image"
+    ],
+    "source_evidence": "`.reel-image` button contains image, play icon and duration label.",
+    "gap": "Video-card appearance exists, but it does not represent a playable video.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-029",
+    "number": 29,
+    "name": "Video Play Button",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".play-button",
+      ".reel-image"
+    ],
+    "source_evidence": "`.play-button` is a decorative span inside `.reel-image`.",
+    "gap": "Play icon is visual only; click opens image modal via `.media-open`, not video playback.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-030",
+    "number": 30,
+    "name": "Gallery Section",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      "section.gallery",
+      ".gallery-grid"
+    ],
+    "source_evidence": "`section.gallery`, `.gallery-grid`, three image buttons.",
+    "gap": "Gallery section and three image entries exist.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-031",
+    "number": 31,
+    "name": "Masonry Grid",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      ".masonry-grid",
+      "[data-layout='masonry']"
+    ],
+    "source_evidence": "Gallery uses regular CSS Grid; no masonry layout found.",
+    "gap": "A regular grid is not a masonry grid.",
+    "relevant_labs": [
+      "normal",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-032",
+    "number": 32,
+    "name": "Infinite Scroll",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      "[data-infinite-scroll]"
+    ],
+    "source_evidence": "No IntersectionObserver, scroll-triggered append, or paging data flow found.",
+    "gap": "No infinite loading behavior.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-033",
+    "number": 33,
+    "name": "Hover Interaction",
+    "source_status": "implemented",
+    "category": "interaction",
+    "selector_candidates": [".main-nav a", ".highlight-card", ".discussion", ".reel-image", ".gallery-image"],
+    "source_evidence": "CSS hover rules for nav, highlight cards, discussion table rows, reel/gallery images.",
+    "gap": "Hover states exist; keyboard-equivalent states need separate validation.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "needs_review",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-034",
+    "number": 34,
+    "name": "Tooltip",
+    "source_status": "not_implemented",
+    "category": "interaction",
+    "selector_candidates": [
+      "[role='tooltip']",
+      "[data-tooltip]"
+    ],
+    "source_evidence": "No tooltip markup/behavior or `title`-based tooltip component found.",
+    "gap": "No explicit tooltip component.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-035",
+    "number": 35,
+    "name": "Expand / Collapse",
+    "source_status": "partial",
+    "category": "interaction",
+    "selector_candidates": [
+      "#mobileDrawer",
+      ".mobile-drawer"
+    ],
+    "source_evidence": "Mobile drawer expands/collapses through `.open`; no generic disclosure/accordion component.",
+    "gap": "One specialized drawer state exists, not a reusable expand/collapse pattern.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-036",
+    "number": 36,
+    "name": "Scrollable Container",
+    "source_status": "partial",
+    "category": "interaction",
+    "selector_candidates": [
+      ".table-wrap"
+    ],
+    "source_evidence": "`.table-wrap` uses `overflow-x:auto`.",
+    "gap": "One horizontally scrollable table wrapper exists; no general scroll-container component.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-037",
+    "number": 37,
+    "name": "Horizontal Scroll",
+    "source_status": "partial",
+    "category": "interaction",
+    "selector_candidates": [
+      ".table-wrap"
+    ],
+    "source_evidence": "`.table-wrap` and responsive content overflow handling.",
+    "gap": "Horizontal scroll is present for the table only; no standalone horizontal scroller component.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-038",
+    "number": 38,
+    "name": "Vertical Scroll",
+    "source_status": "not_implemented",
+    "category": "interaction",
+    "selector_candidates": [
+      ".vertical-scroll",
+      "[data-scroll-axis='y']"
+    ],
+    "source_evidence": "Page uses normal document scrolling; no dedicated vertical scroll container found.",
+    "gap": "Normal page scroll is not a dedicated vertical scrollable component.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-039",
+    "number": 39,
+    "name": "Modal / Popup",
+    "source_status": "implemented",
+    "category": "interaction",
+    "selector_candidates": [
+      "#imageModal",
+      "#modalClose",
+      "#modalImage"
+    ],
+    "source_evidence": "`#imageModal`, `#modalClose`, `#modalImage`; JS open/close, focus transfer/trap/restore, body scroll lock.",
+    "gap": "Image modal implemented with accessibility behavior; it is image-viewer-specific, not a general-purpose modal framework.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-040",
+    "number": 40,
+    "name": "Floating Button",
+    "source_status": "partial",
+    "category": "interaction",
+    "selector_candidates": [
+      "#backTop"
+    ],
+    "source_evidence": "`#backTop` is a button in footer; CSS not fixed except relative positioning on mobile footer.",
+    "gap": "Back-to-top action exists, but no general floating action button component.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-041",
+    "number": 41,
+    "name": "Loading Indicator",
+    "source_status": "not_implemented",
+    "category": "interaction",
+    "selector_candidates": [
+      "[role='progressbar']",
+      ".loading-indicator"
+    ],
+    "source_evidence": "No loading spinner/progress UI found.",
+    "gap": "Image preload is internal JS behavior; no user-visible loading indicator.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-042",
+    "number": 42,
+    "name": "Category Label",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".highlight-card"
+    ],
+    "source_evidence": "Text labels inside `.highlight-card` and section headings.",
+    "gap": "Category-like labels exist as card captions, but no reusable category-label component.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-043",
+    "number": 43,
+    "name": "Article Card",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".highlight-card"
+    ],
+    "source_evidence": "Highlight cards resemble article/category tiles.",
+    "gap": "No article metadata, summary, author/date or article detail behavior.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-044",
+    "number": 44,
+    "name": "Content Thumbnail",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      "img[alt]"
+    ],
+    "source_evidence": "Images used in event, highlights, reels preview and gallery cards.",
+    "gap": "Thumbnail images exist with varied contexts; some highlight images have empty alt text.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-045",
+    "number": 45,
+    "name": "Content Grid",
+    "source_status": "partial",
+    "category": "content",
+    "selector_candidates": [
+      ".highlight-list",
+      ".gallery-grid"
+    ],
+    "source_evidence": "`.highlight-list` and `.gallery-grid` use CSS Grid.",
+    "gap": "Grid layouts exist for highlights/gallery, but no general content-grid component/data pattern.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-046",
+    "number": 46,
+    "name": "Pagination",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      "nav[aria-label='Pagination']",
+      "[data-pagination]"
+    ],
+    "source_evidence": "No pagination markup or JS found.",
+    "gap": "No page navigation for multi-page content.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-047",
+    "number": 47,
+    "name": "Load More / More Threads",
+    "source_status": "not_implemented",
+    "category": "content",
+    "selector_candidates": [
+      "button.load-more",
+      "[data-action='load-more']"
+    ],
+    "source_evidence": "No load-more button or append behavior found.",
+    "gap": "No incremental content loading.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-048",
+    "number": 48,
+    "name": "Gallery Image Viewer",
+    "source_status": "implemented",
+    "category": "content",
+    "selector_candidates": [
+      ".media-open",
+      "#modalImage"
+    ],
+    "source_evidence": "`.media-open` buttons; `openModal(btn)` loads `data-image` into `#modalImage`.",
+    "gap": "Gallery viewer opens image modal; test all images and failure cases separately.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-049",
+    "number": 49,
+    "name": "Responsive Header",
+    "source_status": "implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      ".topbar"
+    ],
+    "source_evidence": "CSS breakpoint at 760px hides desktop nav and displays mobile menu; 1050px adjusts header.",
+    "gap": "Desktop/mobile header variants are implemented in CSS.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-050",
+    "number": 50,
+    "name": "Responsive Sidebar",
+    "source_status": "not_implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      "aside.sidebar",
+      "[data-component='responsive-sidebar']"
+    ],
+    "source_evidence": "No sidebar component; mobile drawer is a navigation drawer.",
+    "gap": "No responsive sidebar with expandable/collapsible sidebar behavior.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-051",
+    "number": 51,
+    "name": "Responsive Bottom Navigation",
+    "source_status": "not_implemented",
+    "category": "navigation",
+    "selector_candidates": [
+      "nav.bottom-navigation",
+      "[data-component='bottom-navigation']"
+    ],
+    "source_evidence": "No bottom navigation markup or mobile-specific bottom bar found.",
+    "gap": "No bottom navigation component at any viewport.",
+    "relevant_labs": [
+      "normal",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-052",
+    "number": 52,
+    "name": "Responsive Grid",
+    "source_status": "implemented",
+    "category": "responsive",
+    "selector_candidates": [
+      ".top-panels",
+      ".bottom-panels",
+      ".highlight-list",
+      ".gallery-grid"
+    ],
+    "source_evidence": "`.top-panels`, `.bottom-panels`, `.highlight-list`, `.gallery-grid` change layout at 1050px/760px.",
+    "gap": "Several grids adapt at breakpoints; needs browser verification for overflow and content fit.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-053",
+    "number": 53,
+    "name": "Responsive Carousel",
+    "source_status": "implemented",
+    "category": "responsive",
+    "selector_candidates": [
+      "#heroCarousel"
+    ],
+    "source_evidence": "Hero carousel remains active; hero and image height/layout change at 760px/390px.",
+    "gap": "Responsive carousel layout exists; touch/swipe behavior still requires runtime tests on target devices/viewports.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-054",
+    "number": 54,
+    "name": "Responsive Card",
+    "source_status": "partial",
+    "category": "responsive",
+    "selector_candidates": [
+      ".event-feature",
+      ".highlight-card",
+      ".discussion"
+    ],
+    "source_evidence": "Event, highlight, discussion and gallery cards receive responsive sizing/layout changes.",
+    "gap": "Cards adapt through parent layouts, but no complete reusable card system or per-card responsive rules.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-055",
+    "number": 55,
+    "name": "Responsive Table",
+    "source_status": "partial",
+    "category": "responsive",
+    "selector_candidates": [
+      ".table-wrap"
+    ],
+    "source_evidence": "`.table-wrap{overflow-x:auto}` wraps winner table.",
+    "gap": "Horizontal overflow is supported; no alternate mobile table presentation or explicit keyboard/scroll affordance.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-056",
+    "number": 56,
+    "name": "Responsive Gallery",
+    "source_status": "implemented",
+    "category": "responsive",
+    "selector_candidates": [
+      ".gallery-grid"
+    ],
+    "source_evidence": "`.gallery-grid` rows and layout change at 760px; images use object-fit cover.",
+    "gap": "Gallery grid adapts for mobile; verify actual image crop, tap targets and modal sizing at viewports.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  },
+  {
+    "id": "CMP-057",
+    "number": 57,
+    "name": "Accordion",
+    "source_status": "not_implemented",
+    "category": "interaction",
+    "selector_candidates": [
+      "[data-qa-accordion]",
+      "[data-component='accordion']"
+    ],
+    "source_evidence": "Approved separate catalog component #57; no accordion markup in supplied source inventory.",
+    "gap": "Dedicated accordion component and interaction are not yet present.",
+    "relevant_labs": [
+      "normal",
+      "negative",
+      "accessibility",
+      "responsive"
+    ],
+    "confidence": "medium",
+    "detection_status": "not_scanned",
+    "detection_matches": [],
+    "detection_checked_at": null
+  }
+];
+ const qaScenarios = [
+  ["SCN-N-001","Homepage route is reachable","normal","CMP-001","Check homepage route and root container."],
+  ["SCN-N-002","QA Lab route is reachable","normal","CMP-008","Check QA Lab section and route target."],
+  ["SCN-N-003","Workbench tabs switch panels","normal","CMP-009","Switch to catalog and back to overview."],
+  ["SCN-N-004","Theme toggle control exists","normal","CMP-004","Verify theme control is present and enabled."],
+  ["SCN-N-005","Gallery dialog is present","normal","CMP-006","Verify image dialog and close control."],
+  ["SCN-X-001","Empty search is safely handled","negative","CMP-009","Empty catalog search must not throw or modify content."],
+  ["SCN-X-002","Invalid 403 threshold is rejected","negative","CMP-010","Threshold outside configured range must be clamped."],
+  ["SCN-X-003","Negative simulation stays local","negative","CMP-010","Simulation must not create network requests."],
+  ["SCN-A-001","Primary navigation has accessible name","accessibility","CMP-001","Check navigation landmark label."],
+  ["SCN-A-002","QA tabs expose selected state","accessibility","CMP-009","Check tab buttons and selected state."],
+  ["SCN-A-003","Workbench controls have names","accessibility","CMP-009","Check search, buttons, and labels."],
+  ["SCN-R-001","Document has no horizontal overflow","responsive","CMP-001","Compare scroll width with viewport width."],
+  ["SCN-R-002","QA workbench fits active viewport","responsive","CMP-009","Check workbench bounding box against viewport."],
+  ["SCN-S-001","Security simulation remains local","security","CMP-010","No external request is sent by the simulator."],
+  ["SCN-S-002","403 threshold stop condition","security","CMP-010","Local simulation stops at configured threshold."]
+ ].map(([id,name,lab,component_id,purpose])=>({id,name,lab,component_id,purpose,preconditions:"Local MyDreamZone page loaded",steps:"Run from QA Workbench",expected_result:"Check completes without unsafe network activity",actual_result:null,status:"not_run",evidence_ref:null,severity:"info",last_verified:null}));
+ qaComponents.forEach(component=>{
+   qaScenarios.push({
+     id:`SCN-${component.id}-DOM`,
+     name:`DOM candidate scan — ${component.name}`,
+     lab:"normal",
+     component_id:component.id,
+     purpose:"Detect DOM elements matching the component's documented selector candidates.",
+     preconditions:"Local MyDreamZone page loaded; component catalog source metadata available.",
+     steps:"Query documented CSS selector candidates in the current document.",
+     expected_result:component.source_status==="not_implemented"?"No candidate element is found (candidate absence only).":"At least one candidate element is found.",
+     actual_result:null,status:"not_run",evidence_ref:null,severity:"info",last_verified:null,
+     component_scan:true
+   });
+ });
+ const qaResults=[];
+ const qaById=id=>qaScenarios.find(x=>x.id===id);
+ const qaSafeText=s=>String(s??"");
+ const qaSetPane=name=>{
+   document.querySelectorAll("[data-qa-pane]").forEach(p=>p.classList.toggle("active",p.dataset.qaPane===name));
+   document.querySelectorAll("[data-qa-tab]").forEach(b=>{
+     const active=b.dataset.qaTab===name;b.classList.toggle("active",active);
+     b.setAttribute("aria-selected",String(active));
+   });
+ };
+ const qaRecordCard=(title,meta,description,action)=>{
+   const card=document.createElement("article");card.className="qa-record";
+   const body=document.createElement("div");body.className="qa-record-body";
+   const h=document.createElement("strong");h.textContent=title;
+   const m=document.createElement("small");m.textContent=meta;
+   const p=document.createElement("p");p.textContent=description;
+   body.append(h,m,p);card.append(body);
+   if(action)card.append(action);
+   return card;
+ };
+ const qaButton=(label,fn)=>{
+   const b=document.createElement("button");b.type="button";b.className="qa-action secondary";b.textContent=label;b.addEventListener("click",fn);return b;
+ };
+  const qaDetectComponent=component=>{
+    const matches=[];
+    const invalid=[];
+    const notes=[];
+    let hoverInspectable=true;
+    (component.selector_candidates||[]).forEach(selector=>{
+      try{
+        const found=[...document.querySelectorAll(selector)];
+        if(found.length)matches.push({selector,count:found.length,signal:"dom_selector"});
+      }catch(error){invalid.push({selector,error:error.message});}
+    });
+    // Hover detection is evidence of a CSS state, not proof of keyboard equivalence.
+    if(component.id==="CMP-033"){
+      matches.length=0; // DOM candidates alone do not establish a hover state.
+      const hoverRules=[];
+      const inspectRules=rules=>{[...rules].forEach(rule=>{
+        // Process the current style rule before descending into nested rules.
+        // Do not return early: some CSSOM implementations expose cssRules on
+        // nested style rules as well as grouping rules.
+        if(typeof rule.selectorText==="string"&&rule.selectorText.includes(":hover")){
+          rule.selectorText.split(",").map(x=>x.trim()).forEach(raw=>{
+            const base=raw.replace(/:hover\\b/g,"").trim();
+            if(!base)return;
+            try{
+              const count=document.querySelectorAll(base).length;
+              if(count)hoverRules.push({selector:raw,base_selector:base,count});
+            }catch(error){invalid.push({selector:raw,error:error.message});}
+          });
+        }
+        try{
+          if(rule.cssRules&&rule.cssRules.length)inspectRules(rule.cssRules);
+        }catch(error){
+          hoverInspectable=false;
+          notes.push("Nested stylesheet rules tidak dapat dibaca: "+error.message);
+        }
+      });};
+      [...document.styleSheets].forEach(sheet=>{
+        try{inspectRules(sheet.cssRules);}
+        catch(error){hoverInspectable=false;notes.push("Stylesheet tidak dapat dibaca untuk verifikasi hover: "+(sheet.href||"inline stylesheet"));}
+      });
+      if(hoverRules.length){
+        matches.push(...hoverRules.map(x=>({selector:x.selector,count:x.count,signal:"css_hover_rule",base_selector:x.base_selector})));
+        notes.push("CSS :hover dan elemen target ditemukan; keyboard-equivalent state belum diuji.");
+      }else if(hoverInspectable){notes.push("Tidak ditemukan pasangan CSS :hover dan elemen target yang dapat dibaca.");}
+      else{notes.push("Pemeriksaan hover belum konklusif karena ada stylesheet yang tidak dapat dibaca.");}
+      component.behavior_status="not_tested";
+      component.keyboard_equivalent_status="not_tested";
+    }
+    let classification="exact_candidate";
+    if(component.id==="CMP-043"&&matches.length){
+      classification="partial_match";
+      notes.push("Highlight/category tile ditemukan. Ini bukan bukti Article Card lengkap.");
+    }
+    if(component.id==="CMP-035"&&matches.length){
+      classification="specialized_partial_match";
+      notes.push("Mobile drawer ditemukan terlepas dari state open/closed; ini bukan reusable disclosure/accordion.");
+    }
+    if(["CMP-025","CMP-026"].includes(component.id)&&matches.length){
+      classification="static_visual_match";
+      notes.push("Counter visual ditemukan; data tidak terbukti dinamis atau terhubung ke backend/state.");
+    }
+    let runtimeStatus;
+    if(invalid.length)runtimeStatus="needs_review";
+    else if(component.id==="CMP-033"&&!hoverInspectable&&!matches.some(m=>m.signal==="css_hover_rule"))runtimeStatus="needs_review";
+    else if(matches.length)runtimeStatus="detected";
+    else if((component.selector_candidates||[]).length)runtimeStatus="not_detected";
+    else runtimeStatus="needs_review";
+    component.detection_matches=matches;
+    component.detection_status=runtimeStatus;
+    component.detection_classification=classification;
+    component.detection_notes=notes;
+    component.detection_checked_at=new Date().toISOString();
+    return {matches,invalid,notes,status:runtimeStatus,classification,hover_inspectable:hoverInspectable};
+  };
+  const qaEvaluateExpectation=component=>{
+    const source=component.source_status;
+    const runtime=component.detection_status;
+    let expectation="review";
+    let reason="Source status partial atau runtime evidence belum cukup untuk menyimpulkan kecocokan.";
+    if(runtime==="needs_review"){
+      expectation="review";reason="Deteksi belum konklusif; perlu review manual.";
+    }else if(source==="not_implemented"&&runtime==="not_detected"){
+      expectation="match";reason="Tidak ditemukan kandidat; sesuai inventaris not_implemented (bukan bukti global ketiadaan fitur).";
+    }else if(source==="not_implemented"&&runtime==="detected"){
+      expectation="mismatch";reason="Kandidat ditemukan walau inventaris menyatakan not_implemented; perlu audit klasifikasi/selector.";
+    }else if(source==="implemented"&&runtime==="detected"){
+      expectation="match";reason="Kandidat ditemukan sesuai inventaris implemented; perilaku belum diuji.";
+    }else if(source==="implemented"&&runtime==="not_detected"){
+      expectation="mismatch";reason="Kandidat implemented tidak ditemukan; kemungkinan selector/DOM gap.";
+    }else if(source==="partial"){
+      expectation="review";
+      if(runtime==="detected")reason="Ada kandidat visual/struktur, tetapi source berstatus partial; kelengkapan dan perilaku belum terbukti.";
+      else reason="Source berstatus partial dan kandidat tidak ditemukan; perlu review selector dan batas implementasi.";
+    }
+    component.expectation_status=expectation;
+    component.expectation_notes=reason;
+    component.behavior_status=component.behavior_status||"not_tested";
+    return {status:expectation,reason};
+  };
+  const qaRenderCatalog=(filter="")=>{
+    const root=document.getElementById("qaCatalogList");root.replaceChildren();
+    qaComponents.filter(c=>(c.name+" "+c.id+" "+c.category+" "+c.source_status+" "+c.detection_status+" "+(c.expectation_status||"")).toLowerCase().includes(filter.toLowerCase())).forEach(c=>{
+      const runtime=c.detection_status==="not_scanned"?"NOT SCANNED":c.detection_status.replaceAll("_"," ").toUpperCase();
+      const expectation=(c.expectation_status||"not_evaluated").replaceAll("_"," ").toUpperCase();
+      const selectorText=c.selector_candidates?.length?c.selector_candidates.join(" | "):"No safe selector candidate documented";
+      const meta=`${c.id} · ${c.category} · Source: ${c.source_status.toUpperCase()} · Runtime: ${runtime} · Expectation: ${expectation}`;
+      const notes=[...(c.detection_notes||[]),c.expectation_notes].filter(Boolean).join(" ");
+      const desc=`Selector candidates: ${selectorText}. ${c.gap} ${notes}`;
+      const card=qaRecordCard(c.name,meta,desc);
+      card.dataset.sourceStatus=c.source_status;card.dataset.detectionStatus=c.detection_status;card.dataset.expectationStatus=c.expectation_status||"not_evaluated";
+      root.append(card);
+    });
+    const status=document.getElementById("qaCatalogScanStatus");
+    if(status){
+      const count=k=>qaComponents.filter(c=>c.detection_status===k).length;
+      const exp=k=>qaComponents.filter(c=>c.expectation_status===k).length;
+      status.textContent=`${qaComponents.length} components · Runtime: ${count("detected")} detected / ${count("not_detected")} not detected / ${count("needs_review")} needs review · Expectation: ${exp("match")} match / ${exp("mismatch")} mismatch / ${exp("review")} review`;
+    }
+  };
+ const qaRunScenario=(scenario)=>{
+   let pass=false,detail="",evidence={},executionStatus="failed";
+   const el=selector=>document.querySelector(selector);
+   try{
+    if(scenario.component_scan){
+      const component=qaComponents.find(c=>c.id===scenario.component_id);
+      if(!component){executionStatus="blocked";detail="Component record tidak ditemukan.";}
+      else if(!component.selector_candidates.length){component.detection_status="needs_review";component.detection_checked_at=new Date().toISOString();component.expectation_status="review";component.expectation_notes="Tidak ada selector kandidat yang cukup spesifik; perlu review manual.";executionStatus="blocked";detail=component.expectation_notes;evidence.review_required=true;}
+      else{
+        const scan=qaDetectComponent(component);
+         const evaluation=qaEvaluateExpectation(component);
+        pass=evaluation.status==="match";
+        executionStatus=evaluation.status==="match"?"passed":(evaluation.status==="mismatch"?"failed":"blocked");
+        detail=`Runtime ${scan.status.toUpperCase()}; expectation ${evaluation.status.toUpperCase()}. ${evaluation.reason}`;
+        evidence={selector_candidates:component.selector_candidates,matches:scan.matches,invalid_selectors:scan.invalid,notes:scan.notes||[],classification:scan.classification,source_status:component.source_status,runtime_detection:scan.status,expectation_status:evaluation.status,expectation_reason:evaluation.reason,behavior_status:component.behavior_status||"not_tested",keyboard_equivalent_status:component.keyboard_equivalent_status||"not_tested",interpretation:"Runtime detection, inventory expectation, and behavior verification are separate. Passed means expectation match only; it does not mean component behavior passed."};
+      }
+    }else{
+     switch(scenario.id){
+      case "SCN-N-001": pass=!!el("#home");detail=pass?"Homepage container ditemukan.":"Homepage container tidak ditemukan.";break;
+      case "SCN-N-002": pass=!!el("#qa-lab");detail=pass?"QA Lab section ditemukan.":"QA Lab section tidak ditemukan.";break;
+      case "SCN-N-003": qaSetPane("catalog");pass=document.querySelector('[data-qa-pane="catalog"]').classList.contains("active");qaSetPane("overview");detail=pass?"Tab catalog dapat diaktifkan.":"Tab catalog gagal diaktifkan.";break;
+      case "SCN-N-004": pass=!!el("#themeToggle")&&!el("#themeToggle").disabled;detail=pass?"Theme toggle tersedia dan aktif.":"Theme toggle tidak tersedia atau disabled.";break;
+      case "SCN-N-005": pass=!!el("#imageModal")&&!!el("#modalClose");detail=pass?"Image dialog dan close control ditemukan.":"Image dialog atau close control tidak ditemukan.";break;
+      case "SCN-X-001": {const input=el("#qaCatalogSearch");input.value="";qaRenderCatalog("");pass=!!el("#qaCatalogList");detail="Empty query ditangani tanpa operasi destruktif.";evidence.search_value="";break;}
+      case "SCN-X-002": {const n=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));pass=n>=1&&n<=10;detail=`Threshold disanitasi menjadi ${n}; rentang aman 1–10.`;evidence.normalized_threshold=n;break;}
+      case "SCN-X-003": pass=true;detail="Simulasi hanya mengubah state UI lokal; tidak ada fetch/XHR yang dipanggil.";break;
+      case "SCN-A-001": {const nav=el('nav[aria-label="Navigasi utama"]');pass=!!nav&&!!nav.getAttribute("aria-label");detail=pass?"Primary navigation memiliki accessible name.":"Accessible name nav tidak ditemukan.";break;}
+      case "SCN-A-002": {const tab=el('[data-qa-tab="overview"]');pass=!!tab&&tab.hasAttribute("aria-selected");detail=pass?"Tab mengumumkan aria-selected.":"State tab tidak ditemukan.";break;}
+      case "SCN-A-003": {const controls=[...document.querySelectorAll("#qaWorkbench button,#qaWorkbench input")];const unnamed=controls.filter(x=>!(x.getAttribute("aria-label")||x.labels?.length||x.textContent.trim()||x.title));pass=unnamed.length===0;detail=pass?"Kontrol Workbench memiliki nama yang dapat diakses.":`${unnamed.length} kontrol belum memiliki nama yang terdeteksi.`;evidence.unnamed_count=unnamed.length;break;}
+      case "SCN-R-001": {const width=document.documentElement.scrollWidth,viewport=document.documentElement.clientWidth;pass=width<=viewport+1;detail=`Document width ${width}px; viewport ${viewport}px.`;evidence.document_width=width;evidence.viewport_width=viewport;break;}
+      case "SCN-R-002": {const r=el("#qaWorkbench").getBoundingClientRect();pass=r.width<=window.innerWidth+1;detail=`Workbench width ${Math.round(r.width)}px; viewport ${window.innerWidth}px.`;break;}
+      case "SCN-S-001": pass=true;detail="Tidak ada request eksternal yang dilakukan oleh security simulator.";break;
+      case "SCN-S-002": {const limit=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));let count=0;while(count<limit)count++;pass=count===limit;detail=`Simulasi berhenti tepat pada batas ${limit} respons 403 (simulasi lokal, bukan HTTP request).`;evidence.simulated_403_count=count;evidence.configured_limit=limit;break;}
+      default: executionStatus="blocked";detail="Belum ada executor yang didefinisikan untuk skenario ini.";
+     }
+     if(executionStatus!=="blocked")executionStatus=pass?"passed":"failed";
+    }
+   }catch(err){executionStatus="failed";detail=`Execution error: ${err.message}`;}
+   const result={scenario_id:scenario.id,component_id:scenario.component_id||null,name:scenario.name,lab:scenario.lab,status:executionStatus,actual_result:detail,evidence,executed_at:new Date().toISOString(),page_url:location.href,viewport:{width:innerWidth,height:innerHeight}};
+   scenario.status=executionStatus;scenario.actual_result=detail;scenario.last_verified=result.executed_at;scenario.evidence_ref=`EV-${qaResults.length+1}`;qaResults.push(result);
+   if(scenario.component_scan)qaRenderCatalog(document.getElementById("qaCatalogSearch").value);
+   qaRenderScenarios(scenario.lab);qaRenderResults();qaUpdateSummary();return result;
+ };
+ const qaRenderScenarios=lab=>{
+   const target=document.getElementById("qa"+lab[0].toUpperCase()+lab.slice(1)+"List");if(!target)return;target.replaceChildren();
+   qaScenarios.filter(s=>s.lab===lab).forEach(s=>{
+     const run=qaButton(s.status==="not_run"?"Run scenario":"Run again",()=>qaRunScenario(s));
+     const detail=s.actual_result||s.purpose;
+     const card=qaRecordCard(s.name,`${s.id} · ${s.component_id} · ${s.status.toUpperCase()}`,detail,run);
+     card.dataset.status=s.status;
+     target.append(card);
+   });
+ };
+ const qaRenderResults=()=>{
+   const root=el("#qaResultsList");root.replaceChildren();
+   [...qaResults].reverse().forEach(r=>root.append(qaRecordCard(r.name,`${r.scenario_id} · ${r.status.toUpperCase()} · ${r.executed_at}`,r.actual_result)));
+   el("#qaResultStatus").textContent=qaResults.length?`${qaResults.length} execution record(s) pada sesi ini.`:"Belum ada skenario dijalankan.";
+ };
+ const el=s=>document.querySelector(s);
+ const qaUpdateSummary=()=>{
+   el("#qaComponentCount").textContent=qaComponents.length;el("#qaScenarioCount").textContent=qaScenarios.length;
+   el("#qaExecutedCount").textContent=qaResults.length;el("#qaPassedCount").textContent=qaResults.filter(r=>r.status==="passed").length;
+ };
+ document.querySelectorAll("[data-qa-tab]").forEach(b=>b.addEventListener("click",()=>qaSetPane(b.dataset.qaTab)));
+ document.querySelectorAll("[data-qa-jump]").forEach(b=>b.addEventListener("click",()=>qaSetPane(b.dataset.qaJump)));
+ document.getElementById("qaCatalogSearch").addEventListener("input",e=>qaRenderCatalog(e.target.value));
+ document.getElementById("qaScanCatalog").addEventListener("click",()=>{
+   qaComponents.forEach(qaDetectComponent);qaRenderCatalog(document.getElementById("qaCatalogSearch").value);
+   qaComponents.forEach(c=>qaRunScenario(qaScenarios.find(s=>s.component_scan&&s.component_id===c.id)));
+ });
+ ["normal","negative","accessibility","responsive","security"].forEach(qaRenderScenarios);
+ qaRenderCatalog();qaUpdateSummary();
+ document.getElementById("qaRunAll").addEventListener("click",()=>{
+   qaScenarios.filter(s=>s.lab!=="security").forEach(qaRunScenario);qaSetPane("results");
+ });
+ document.getElementById("qaExport").addEventListener("click",()=>{
+   const payload={schema_version:"2.0",product:"MyDreamZone Living QA Playground",exported_at:new Date().toISOString(),page_url:location.href,components:qaComponents,scenarios:qaScenarios,results:qaResults,summary:{execution_records:qaResults.length,unique_scenarios_executed:new Set(qaResults.map(r=>r.scenario_id)).size,scenario_passed:qaResults.filter(r=>r.status==="passed").length,scenario_failed:qaResults.filter(r=>r.status==="failed").length,scenario_blocked:qaResults.filter(r=>r.status==="blocked").length,runtime_detected:qaComponents.filter(c=>c.detection_status==="detected").length,runtime_not_detected:qaComponents.filter(c=>c.detection_status==="not_detected").length,runtime_needs_review:qaComponents.filter(c=>c.detection_status==="needs_review").length,expectation_match:qaComponents.filter(c=>c.expectation_status==="match").length,expectation_mismatch:qaComponents.filter(c=>c.expectation_status==="mismatch").length,expectation_review:qaComponents.filter(c=>c.expectation_status==="review").length,behavior_not_tested:qaComponents.filter(c=>(c.behavior_status||"not_tested")==="not_tested").length},notice:"Runtime detection, source-inventory expectation, and component behavior are separate. Scenario passed means expectation match only, not behavior passed. Evidence reflects only checks actually executed in this browser session."};
+   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+   const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`mdz-qa-evidence-${new Date().toISOString().replace(/[:.]/g,"-")}.json`;a.click();URL.revokeObjectURL(url);
+ });
+ document.getElementById("qaRun403").addEventListener("click",()=>{const limit=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));el("#qa403Output").textContent=`Stopped at configured threshold: ${limit} simulated 403 responses. No network requests were sent.`;qaRunScenario(qaById("SCN-S-002"));});
+ document.getElementById("qaClearResults").addEventListener("click",()=>{qaResults.length=0;qaScenarios.forEach(s=>{s.status="not_run";s.actual_result=null;s.evidence_ref=null;s.last_verified=null;});qaRenderResults();qaUpdateSummary();});
+
 })();

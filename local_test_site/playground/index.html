@@ -19,7 +19,7 @@
     <small>AUTOMOTIVE · LIFESTYLE · COMMUNITY</small>
   </a>
   <nav class="main-nav" aria-label="Navigasi utama">
-    <a class="active" href="#home">Home</a><a href="#articles">Articles</a><a href="#events">Events</a><a href="#gallery">Gallery</a><a href="#community">Community</a>
+    <a class="active" href="#home" data-site-nav>Home</a><a href="#articles" data-site-nav>Articles</a><a href="#events" data-site-nav>Events</a><a href="#gallery" data-site-nav>Gallery</a><a href="#community" data-site-nav>Community</a><a href="#qa-lab" data-qa-nav>QA Lab</a>
   </nav>
   <div class="top-actions">
     <button class="icon-btn search-toggle" id="searchToggle" aria-label="Cari">⌕</button>
@@ -31,7 +31,7 @@
 
 <aside class="mobile-drawer" id="mobileDrawer" aria-label="Menu mobile">
   <div class="drawer-head"><span class="brand-name">MyDream<span>Zone</span></span><button class="icon-btn" id="menuClose" aria-label="Tutup menu">×</button></div>
-  <a href="#home">Home</a><a href="#articles">Articles</a><a href="#events">Events</a><a href="#gallery">Gallery</a><a href="#community">Community</a>
+  <a href="#home" data-site-nav>Home</a><a href="#articles" data-site-nav>Articles</a><a href="#events" data-site-nav>Events</a><a href="#gallery" data-site-nav>Gallery</a><a href="#community" data-site-nav>Community</a><a href="#qa-lab" data-qa-nav>QA Lab</a>
   <p>BUILD · TUNE · RACE · TOGETHER</p>
 </aside>
 <button class="drawer-scrim" id="drawerScrim" aria-label="Tutup menu"></button>
@@ -114,6 +114,121 @@
   </section>
 </main>
 
+
+<section class="qa-lab-page" id="qa-lab" aria-labelledby="qaLabTitle">
+  <div class="qa-lab-shell">
+    <div class="qa-lab-heading">
+      <a class="qa-back-link" href="#home">← Kembali ke MyDreamZone</a>
+      <p class="qa-eyebrow">MYDREAMZONE · QUALITY ASSURANCE</p>
+      <h1 id="qaLabTitle">Living QA Playground</h1>
+      <p class="qa-intro">Area latihan dan validasi QA dalam satu website MyDreamZone. Pilih lab untuk menjelajahi skenario pengujian yang akan dikembangkan bertahap.</p>
+    </div>
+
+    <section class="qa-workbench" id="qaWorkbench" aria-labelledby="qaWorkbenchTitle">
+      <div class="qa-workbench-head">
+        <div><p class="qa-eyebrow">QA CONTROL CENTER · D2–D7</p><h2 id="qaWorkbenchTitle">QA Workbench</h2><p>Component catalog, scenario registry, lab execution, evidence, dan regression dalam satu tempat.</p></div>
+        <div class="qa-workbench-actions"><button type="button" class="qa-action" id="qaRunAll">Run safe checks</button><button type="button" class="qa-action secondary" id="qaExport">Export evidence</button></div>
+      </div>
+      <div class="qa-summary-grid" id="qaSummary">
+        <article><span>Components</span><strong id="qaComponentCount">—</strong></article>
+        <article><span>Scenarios</span><strong id="qaScenarioCount">—</strong></article>
+        <article><span>Executed</span><strong id="qaExecutedCount">0</strong></article>
+        <article><span>Checks Passed</span><strong id="qaPassedCount">0</strong></article>
+      </div>
+      <p class="qa-summary-note">Checks Passed menghitung skenario yang memenuhi ekspektasi. Untuk DOM scan, ini hanya kecocokan inventaris — bukan bukti perilaku komponen lulus.</p>
+      <nav class="qa-workbench-tabs" aria-label="QA Workbench sections">
+        <button type="button" class="active" data-qa-tab="overview">Overview</button>
+        <button type="button" data-qa-tab="catalog">Component Catalog</button>
+        <button type="button" data-qa-tab="normal">Normal</button>
+        <button type="button" data-qa-tab="negative">Negative</button>
+        <button type="button" data-qa-tab="accessibility">Accessibility</button>
+        <button type="button" data-qa-tab="responsive">Responsive</button>
+        <button type="button" data-qa-tab="security">Security</button>
+        <button type="button" data-qa-tab="results">Evidence & Regression</button>
+      </nav>
+      <div class="qa-workbench-content">
+        <section class="qa-pane active" data-qa-pane="overview">
+          <h3>Execution overview</h3><p class="qa-muted">Pilih lab untuk melihat skenario yang tersedia. Safe checks hanya memeriksa DOM dan perilaku lokal yang telah ditentukan.</p>
+          <div class="qa-overview-grid">
+            <button data-qa-jump="catalog">Component Catalog <small>Inventaris komponen terdaftar</small></button>
+            <button data-qa-jump="normal">Normal Scenarios <small>Perilaku standar</small></button>
+            <button data-qa-jump="negative">Negative Test Lab <small>Simulasi negatif lokal</small></button>
+            <button data-qa-jump="accessibility">Accessibility Lab <small>Semantik dan keyboard</small></button>
+            <button data-qa-jump="responsive">Responsive Lab <small>Viewport dan overflow</small></button>
+            <button data-qa-jump="security">Security Behavior Lab <small>Simulasi kebijakan lokal</small></button>
+          </div>
+          <p class="qa-safety-note"><strong>Safety boundary:</strong> Security Lab tidak mengirim request ke website eksternal, tidak melakukan bypass kontrol keamanan, dan tidak menguji sistem di luar localhost.</p>
+        </section>
+        <section class="qa-pane" data-qa-pane="catalog">
+          <div class="qa-pane-toolbar"><h3>Component Catalog</h3><div class="qa-catalog-tools"><input id="qaCatalogSearch" type="search" placeholder="Cari komponen…" aria-label="Cari komponen"><button type="button" class="qa-action" id="qaScanCatalog">Scan DOM catalog</button></div></div><p id="qaCatalogScanStatus" class="qa-muted" aria-live="polite">57 components · belum dipindai.</p>
+          <div id="qaCatalogList" class="qa-record-list"></div>
+        </section>
+        <section class="qa-pane" data-qa-pane="normal">
+          <h3>Normal Scenarios</h3><p class="qa-muted">Validasi komponen dan navigasi dalam kondisi penggunaan standar.</p><div id="qaNormalList" class="qa-record-list"></div>
+        </section>
+        <section class="qa-pane" data-qa-pane="negative">
+          <h3>Negative Test Lab</h3><p class="qa-muted">Semua skenario negatif bersifat simulasi dan terisolasi di dalam QA Workbench.</p><div id="qaNegativeList" class="qa-record-list"></div>
+        </section>
+        <section class="qa-pane" data-qa-pane="accessibility">
+          <h3>Accessibility Lab</h3><p class="qa-muted">Pemeriksaan otomatis dasar; bukan pengganti audit manual dengan assistive technology.</p><div id="qaAccessibilityList" class="qa-record-list"></div>
+        </section>
+        <section class="qa-pane" data-qa-pane="responsive">
+          <h3>Responsive Lab</h3><p class="qa-muted">Pemeriksaan viewport aktif, document overflow, dan elemen layout.</p><div id="qaResponsiveList" class="qa-record-list"></div>
+        </section>
+        <section class="qa-pane" data-qa-pane="security">
+          <h3>Security Behavior Lab</h3><p class="qa-muted">Simulasi lokal tanpa request jaringan. Hasilnya bukan sertifikasi keamanan.</p><div id="qaSecurityList" class="qa-record-list"></div>
+          <div class="qa-security-sim"><label for="qa403Limit">Batas simulasi 403</label><input id="qa403Limit" type="number" min="1" max="10" value="3"><button type="button" class="qa-action" id="qaRun403">Run local 403 simulation</button><output id="qa403Output" aria-live="polite">Belum dijalankan.</output></div>
+        </section>
+        <section class="qa-pane" data-qa-pane="results">
+          <h3>Evidence & Regression</h3><p class="qa-muted">Hasil aktual sesi browser ini. Export menghasilkan JSON yang dapat disimpan sebagai evidence.</p>
+          <div class="qa-result-toolbar"><button type="button" class="qa-action secondary" id="qaClearResults">Clear session results</button><span id="qaResultStatus" role="status">Belum ada skenario dijalankan.</span></div>
+          <div id="qaResultsList" class="qa-record-list"></div>
+        </section>
+      </div>
+    </section>
+    <div class="qa-lab-grid" aria-label="Daftar QA Lab">
+      <a class="qa-lab-card" href="#lab-normal"><span class="qa-lab-number">01</span><span class="qa-lab-icon" aria-hidden="true">✓</span><h2>Normal Scenarios</h2><p>Alur penggunaan normal dan perilaku yang diharapkan.</p><span class="qa-card-action">Buka lab →</span></a>
+      <a class="qa-lab-card" href="#lab-negative"><span class="qa-lab-number">02</span><span class="qa-lab-icon" aria-hidden="true">⚠</span><h2>Negative Test Lab</h2><p>Input tidak valid, kegagalan terkontrol, dan kondisi negatif yang terisolasi.</p><span class="qa-card-action">Buka lab →</span></a>
+      <a class="qa-lab-card" href="#lab-accessibility"><span class="qa-lab-number">03</span><span class="qa-lab-icon" aria-hidden="true">◎</span><h2>Accessibility Lab</h2><p>Keyboard, fokus, label, role, state, dan semantik.</p><span class="qa-card-action">Buka lab →</span></a>
+      <a class="qa-lab-card" href="#lab-responsive"><span class="qa-lab-number">04</span><span class="qa-lab-icon" aria-hidden="true">▣</span><h2>Responsive Lab</h2><p>Layout desktop, tablet, dan mobile; overflow serta clipping.</p><span class="qa-card-action">Buka lab →</span></a>
+      <a class="qa-lab-card" href="#lab-security"><span class="qa-lab-number">05</span><span class="qa-lab-icon" aria-hidden="true">⌑</span><h2>Security Behavior Lab</h2><p>Perilaku keamanan pada endpoint lokal dan skenario yang aman.</p><span class="qa-card-action">Buka lab →</span></a>
+    </div>
+    <div class="qa-lab-details">
+      <section class="qa-detail-panel" id="lab-normal" aria-labelledby="labNormalTitle">
+        <p class="qa-eyebrow">LAB 01</p><h2 id="labNormalTitle">Normal Scenarios</h2>
+        <p>Tempat pengujian alur normal pada komponen dan halaman MyDreamZone. Skenario akan memeriksa apakah interaksi berjalan sesuai perilaku yang diharapkan.</p>
+        <ul><li>Alur penggunaan standar</li><li>Validasi hasil interaksi dan state UI</li><li>Evidence untuk setiap hasil pengujian</li></ul>
+        <a href="#qa-lab" class="qa-back-link">↑ Kembali ke daftar lab</a>
+      </section>
+      <section class="qa-detail-panel" id="lab-negative" aria-labelledby="labNegativeTitle">
+        <p class="qa-eyebrow">LAB 02</p><h2 id="labNegativeTitle">Negative Test Lab</h2>
+        <p>Area khusus untuk kondisi negatif dan reproduksi kegagalan yang disengaja. Skenario negatif tidak ditempatkan pada homepage normal.</p>
+        <ul><li>Input kosong atau tidak valid</li><li>Simulasi error yang terkontrol</li><li>Penanda <code>NEGATIVE TEST</code> dan <code>INTENTIONAL BUG REPRODUCTION</code></li></ul>
+        <a href="#qa-lab" class="qa-back-link">↑ Kembali ke daftar lab</a>
+      </section>
+      <section class="qa-detail-panel" id="lab-accessibility" aria-labelledby="labAccessibilityTitle">
+        <p class="qa-eyebrow">LAB 03</p><h2 id="labAccessibilityTitle">Accessibility Lab</h2>
+        <p>Area untuk memeriksa aksesibilitas interaksi, struktur, dan informasi komponen.</p>
+        <ul><li>Navigasi keyboard dan urutan fokus</li><li>Accessible name, label, role, dan state</li><li>Semantik serta perilaku dialog</li></ul>
+        <a href="#qa-lab" class="qa-back-link">↑ Kembali ke daftar lab</a>
+      </section>
+      <section class="qa-detail-panel" id="lab-responsive" aria-labelledby="labResponsiveTitle">
+        <p class="qa-eyebrow">LAB 04</p><h2 id="labResponsiveTitle">Responsive Lab</h2>
+        <p>Area pemeriksaan tampilan lintas ukuran layar pada satu website MyDreamZone.</p>
+        <ul><li>Desktop, tablet, dan mobile</li><li>Overflow, clipping, dan overlap</li><li>Ukuran target interaksi dan sticky elements</li></ul>
+        <a href="#qa-lab" class="qa-back-link">↑ Kembali ke daftar lab</a>
+      </section>
+      <section class="qa-detail-panel" id="lab-security" aria-labelledby="labSecurityTitle">
+        <p class="qa-eyebrow">LAB 05</p><h2 id="labSecurityTitle">Security Behavior Lab</h2>
+        <p>Area simulasi perilaku keamanan pada lingkungan lokal yang dikendalikan. Tidak ada bypass CAPTCHA, Cloudflare, WAF, atau kontrol keamanan website lain.</p>
+        <ul><li>Endpoint lokal dan skenario allowlist</li><li>Rate limit serta pencatatan evidence yang aman</li><li>Berhenti saat batas respons 403 terkonfigurasi tercapai</li></ul>
+        <a href="#qa-lab" class="qa-back-link">↑ Kembali ke daftar lab</a>
+      </section>
+    </div>
+    <p class="qa-foundation-note"><strong>D1 Foundation:</strong> Navigasi, landing page, dan lima area lab sudah disiapkan. Kontrol dan skenario pengujian akan diimplementasikan pada checkpoint berikutnya.</p>
+  </div>
+</section>
+
 <footer class="site-footer">
   <a class="brand footer-brand" href="#home"><span class="brand-name">MyDream<span>Zone</span><i class="checkers">▰▰</i></span><small>AUTOMOTIVE · LIFESTYLE · COMMUNITY</small></a>
   <div class="social-links" aria-label="Social media"><a href="#footer" aria-label="YouTube">▶</a><a href="#footer" aria-label="Instagram">◎</a><a href="#footer" aria-label="TikTok">♪</a><a href="#footer" aria-label="Facebook">f</a></div>
@@ -122,7 +237,14 @@
   <button class="back-top" id="backTop" aria-label="Kembali ke atas">↑</button>
 </footer>
 
-<div class="image-modal" id="imageModal" role="dialog" aria-modal="true" aria-label="Image viewer"><button id="modalClose" aria-label="Tutup">×</button><img id="modalImage" alt="Pratinjau gambar"></div>
+<!--
+  NORMAL PLACEHOLDER:
+  #modalImage sengaja tidak memiliki src pada kondisi awal.
+  JavaScript mengisi src dari btn.dataset.image ketika pengguna
+  membuka gambar galeri. Kondisi tanpa src sebelum modal dibuka
+  adalah perilaku normal, bukan negative test atau bug.
+-->
+<div class="image-modal" id="imageModal" role="dialog" aria-modal="true" aria-label="Image viewer" tabindex="-1"><button id="modalClose" aria-label="Tutup">×</button><img id="modalImage" alt="Pratinjau gambar"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
