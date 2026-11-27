@@ -1416,6 +1416,14 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
     "detection_checked_at": null
   }
 ];
+ const qaSelectorOwners=new Map();
+ qaComponents.forEach(component=>{
+   (component.selector_candidates||[]).forEach(selector=>{
+     const owners=qaSelectorOwners.get(selector)||[];
+     if(!owners.includes(component.id))owners.push(component.id);
+     qaSelectorOwners.set(selector,owners);
+   });
+ });
  const qaScenarios = [
   ["SCN-N-001","Homepage route is reachable","normal","CMP-001","Check homepage route and root container."],
   ["SCN-N-002","QA Lab route is reachable","normal","CMP-008","Check QA Lab section and route target."],
@@ -1478,7 +1486,10 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
     (component.selector_candidates||[]).forEach(selector=>{
       try{
         const found=[...document.querySelectorAll(selector)];
-        if(found.length)matches.push({selector,count:found.length,signal:"dom_selector"});
+        if(found.length){
+           const owners=qaSelectorOwners.get(selector)||[];
+           matches.push({selector,count:found.length,signal:"dom_selector",owners,ambiguous:owners.length>1});
+         }
       }catch(error){invalid.push({selector,error:error.message});}
     });
     // Hover detection is evidence of a CSS state, not proof of keyboard equivalence.
@@ -1491,7 +1502,7 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
         // nested style rules as well as grouping rules.
         if(typeof rule.selectorText==="string"&&rule.selectorText.includes(":hover")){
           rule.selectorText.split(",").map(x=>x.trim()).forEach(raw=>{
-            const base=raw.replace(/:hover\\b/g,"").trim();
+            const base=raw.replace(/:hover\b/g,"").trim();
             if(!base)return;
             try{
               const count=document.querySelectorAll(base).length;
@@ -1531,10 +1542,19 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
       classification="static_visual_match";
       notes.push("Counter visual ditemukan; data tidak terbukti dinamis atau terhubung ke backend/state.");
     }
+    const hasUnambiguousMatch=matches.some(match=>!match.ambiguous);
+    if(matches.some(match=>match.ambiguous)){
+      notes.push("Sebagian selector digunakan oleh lebih dari satu record komponen; bukti tersebut tidak dianggap unik.");
+    }
+    if(matches.length&&!hasUnambiguousMatch){
+      classification="ambiguous_candidate";
+      notes.push("Seluruh kandidat yang cocok dipakai bersama oleh beberapa komponen; perlu review manual sebelum dianggap terdeteksi.");
+    }
     let runtimeStatus;
-    if(invalid.length)runtimeStatus="needs_review";
-    else if(component.id==="CMP-033"&&!hoverInspectable&&!matches.some(m=>m.signal==="css_hover_rule"))runtimeStatus="needs_review";
-    else if(matches.length)runtimeStatus="detected";
+     if(invalid.length)runtimeStatus="needs_review";
+     else if(component.id==="CMP-033"&&!hoverInspectable&&!matches.some(m=>m.signal==="css_hover_rule"))runtimeStatus="needs_review";
+     else if(matches.length&&!hasUnambiguousMatch)runtimeStatus="needs_review";
+     else if(matches.length)runtimeStatus="detected";
     else if((component.selector_candidates||[]).length)runtimeStatus="not_detected";
     else runtimeStatus="needs_review";
     component.detection_matches=matches;
@@ -1656,7 +1676,7 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
  document.querySelectorAll("[data-qa-jump]").forEach(b=>b.addEventListener("click",()=>qaSetPane(b.dataset.qaJump)));
  document.getElementById("qaCatalogSearch").addEventListener("input",e=>qaRenderCatalog(e.target.value));
  document.getElementById("qaScanCatalog").addEventListener("click",()=>{
-   qaComponents.forEach(qaDetectComponent);qaRenderCatalog(document.getElementById("qaCatalogSearch").value);
+    qaRenderCatalog(document.getElementById("qaCatalogSearch").value);
    qaComponents.forEach(c=>qaRunScenario(qaScenarios.find(s=>s.component_scan&&s.component_id===c.id)));
  });
  ["normal","negative","accessibility","responsive","security"].forEach(qaRenderScenarios);
