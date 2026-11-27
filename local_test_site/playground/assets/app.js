@@ -1521,21 +1521,33 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
    qaRenderCatalog(document.getElementById("qaCatalogSearch").value);
  };
  const qaValidateScenarioRegistry=()=>{
-   const errors=[];
-   const componentIds=new Set(qaComponents.map(c=>c.id));
+   const errors=[]; const componentIds=new Set();
+   const validComponentStatuses=new Set(["implemented","partial","not_implemented"]);
+   qaComponents.forEach((c,index)=>{
+     if(!c||typeof c!=="object"){errors.push(`invalid component record at index ${index}`);return;}
+     if(typeof c.id!=="string"||!/^CMP-\d{3}$/.test(c.id))errors.push(`invalid component id at index ${index}`);
+     if(componentIds.has(c.id))errors.push(`duplicate component id: ${c.id}`); componentIds.add(c.id);
+     if(typeof c.name!=="string"||!c.name.trim())errors.push(`component name missing: ${c.id}`);
+     if(typeof c.category!=="string"||!c.category.trim())errors.push(`component category missing: ${c.id}`);
+     if(!validComponentStatuses.has(c.source_status))errors.push(`invalid source status: ${c.id}`);
+     if(!Array.isArray(c.selector_candidates)||!c.selector_candidates.length||c.selector_candidates.some(x=>typeof x!=="string"||!x.trim()))errors.push(`invalid selector candidates: ${c.id}`);
+   });
    if(qaComponents.length!==57)errors.push(`component count expected 57, got ${qaComponents.length}`);
-   if(componentIds.size!==qaComponents.length)errors.push("duplicate component id");
-   const scenarioIds=new Set();
-   const validLabs=new Set(["normal","negative","accessibility","responsive","security"]);
-   qaScenarios.forEach(s=>{
-     if(!s.id||scenarioIds.has(s.id))errors.push(`duplicate scenario id: ${s.id||"(missing)"}`);
-     scenarioIds.add(s.id);
+   const scenarioIds=new Set(); const validLabs=new Set(["normal","negative","accessibility","responsive","security"]);
+   const validStatuses=new Set(["not_run","passed","failed","blocked"]); const validSeverities=new Set(["info","low","medium","high","critical"]);
+   qaScenarios.forEach((s,index)=>{
+     if(!s||typeof s!=="object"){errors.push(`invalid scenario record at index ${index}`);return;}
+     if(typeof s.id!=="string"||!/^SCN-(?:[A-Z]-\d{3}|CMP-\d{3}-DOM)$/.test(s.id))errors.push(`invalid scenario id at index ${index}`);
+     if(scenarioIds.has(s.id))errors.push(`duplicate scenario id: ${s.id||"(missing)"}`); scenarioIds.add(s.id);
      if(!validLabs.has(s.lab))errors.push(`invalid lab for ${s.id}: ${s.lab}`);
      if(s.component_id!==null&&!componentIds.has(s.component_id))errors.push(`unknown component reference: ${s.id} -> ${s.component_id}`);
-     if(!s.name||!s.purpose||!s.expected_result)errors.push(`required scenario metadata missing: ${s.id}`);
+     ["name","purpose","preconditions","steps","expected_result"].forEach(key=>{if(typeof s[key]!=="string"||!s[key].trim())errors.push(`required scenario field ${key} missing: ${s.id}`);});
+     if(!validSeverities.has(s.severity))errors.push(`invalid severity for ${s.id}: ${s.severity}`);
+     if(!validStatuses.has(s.status))errors.push(`invalid status for ${s.id}: ${s.status}`);
+     if(s.component_scan===true){if(!/^SCN-CMP-\d{3}-DOM$/.test(s.id)||s.lab!=="normal"||!s.component_id)errors.push(`invalid component scan contract: ${s.id}`);}
+     else if(s.id.startsWith("SCN-CMP-"))errors.push(`component scan marker missing: ${s.id}`);
    });
-   const scans=qaScenarios.filter(s=>s.component_scan);
-   const scanIds=new Set(scans.map(s=>s.component_id));
+   const scans=qaScenarios.filter(s=>s.component_scan===true); const scanIds=new Set(scans.map(s=>s.component_id));
    if(scans.length!==qaComponents.length||scanIds.size!==qaComponents.length||qaComponents.some(c=>!scanIds.has(c.id)))errors.push("component scan coverage must be exactly one scenario per component");
    if(qaScenarios.length!==72)errors.push(`scenario count expected 72, got ${qaScenarios.length}`);
    if(errors.length)throw new Error("Scenario registry validation failed: "+errors.join("; "));
@@ -1798,7 +1810,17 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
       case "SCN-X-003": executionStatus="blocked";detail="Tidak dijalankan: executor ini belum menginstrumentasi seluruh kanal network browser, sehingga tidak dapat membuktikan ketiadaan request.";evidence={verification:"not_instrumented",reason:"No network instrumentation"};break;
       case "SCN-A-001": {const nav=el('nav[aria-label="Navigasi utama"]');pass=!!nav&&!!nav.getAttribute("aria-label");detail=pass?"Primary navigation memiliki accessible name.":"Accessible name nav tidak ditemukan.";break;}
       case "SCN-A-002": {const tab=el('[data-qa-tab="overview"]');pass=!!tab&&tab.hasAttribute("aria-selected");detail=pass?"Tab mengumumkan aria-selected.":"State tab tidak ditemukan.";break;}
-      case "SCN-A-003": {const controls=[...document.querySelectorAll("#qaWorkbench button,#qaWorkbench input")];const unnamed=controls.filter(x=>!(x.getAttribute("aria-label")||x.labels?.length||x.textContent.trim()||x.title));pass=unnamed.length===0;detail=pass?"Kontrol Workbench memiliki nama yang dapat diakses.":`${unnamed.length} kontrol belum memiliki nama yang terdeteksi.`;evidence.unnamed_count=unnamed.length;break;}
+      case "SCN-A-003": {
+        const controls=[...document.querySelectorAll("#qaWorkbench button,#qaWorkbench input,#qaWorkbench select,#qaWorkbench textarea")];
+        const accessibleName=x=>!!(x.getAttribute("aria-label")||x.getAttribute("aria-labelledby")||x.labels?.length||x.textContent.trim()||x.title);
+        const unnamed=controls.filter(x=>!accessibleName(x));
+        const duplicateIds=[...document.querySelectorAll("#qaWorkbench [id]")].map(x=>x.id).filter((id,index,all)=>all.indexOf(id)!==index);
+        const landmarks=[...document.querySelectorAll("header,nav,main,footer,[role=main],[role=navigation]")].map(x=>({tag:x.tagName.toLowerCase(),role:x.getAttribute("role"),label:x.getAttribute("aria-label")||x.getAttribute("aria-labelledby")||null}));
+        const headings=[...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].map(x=>({level:Number(x.tagName.slice(1)),text:x.textContent.trim().slice(0,100)}));
+        pass=unnamed.length===0&&duplicateIds.length===0&&landmarks.some(x=>x.tag==="main"||x.role==="main");
+        detail=pass?"Accessible names, unique Workbench IDs, and main landmark smoke checks passed.":`${unnamed.length} unnamed controls; ${duplicateIds.length} duplicate IDs; main landmark ${landmarks.some(x=>x.tag==="main"||x.role==="main")?"present":"missing"}.`;
+        evidence={control_count:controls.length,unnamed_controls:unnamed.map(x=>({tag:x.tagName.toLowerCase(),id:x.id||null,type:x.getAttribute("type")})),duplicate_ids:duplicateIds,landmarks,heading_outline:headings,scope:"accessibility_smoke_not_wcag_conformance"}; break;
+      }
       case "SCN-R-001": {const width=document.documentElement.scrollWidth,viewport=document.documentElement.clientWidth;pass=width<=viewport+1;detail=`Current viewport only: document ${width}px; viewport ${viewport}px.`;evidence={document_width:width,viewport_width:viewport,horizontal_overflow_px:Math.max(0,width-viewport),scope:"current_viewport_only"};break;}
       case "SCN-R-002": {const workbench=el("#qaWorkbench");if(!workbench){executionStatus="blocked";detail="QA Workbench tidak ditemukan.";break;}const r=workbench.getBoundingClientRect(),viewport=document.documentElement.clientWidth;pass=r.width<=viewport+1&&r.left>=-1&&r.right<=viewport+1;detail=`Current viewport only: Workbench left ${Math.round(r.left)}px, right ${Math.round(r.right)}px, width ${Math.round(r.width)}px; viewport ${viewport}px.`;evidence={left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),viewport_width:viewport,scope:"current_viewport_only"};break;}
       case "SCN-S-001": pass=true;detail="Tidak ada request eksternal yang dilakukan oleh security simulator.";evidence={simulation_only:true,network_requests:0};break;
@@ -1830,7 +1852,9 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
      scenario_id:scenario.id,component_id:scenario.component_id??null,name:scenario.name,lab:scenario.lab,
      status:executionStatus,actual_result:detail,evidence:qaClone(evidence),
      executed_at:new Date().toISOString(),page_url:qaSanitizePageUrl(location.href),
-     viewport:{width:innerWidth,height:innerHeight}
+     viewport:{width:innerWidth,height:innerHeight,device_scale_factor:window.devicePixelRatio||1},
+     evidence_type:"browser_assertion_metadata",
+     screenshot_captured:false
    };
    scenario.status=executionStatus;scenario.actual_result=detail;scenario.last_verified=result.executed_at;scenario.evidence_ref=result.execution_id;qaResults.push(result);
    if(scenario.component_scan)qaRenderCatalog(document.getElementById("qaCatalogSearch").value);
@@ -1915,15 +1939,29 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
    setTimeout(()=>URL.revokeObjectURL(url),1000);
  });
  const qaValidateExportPayload=payload=>{
-   return !!payload&&payload.schema_version==="3.0"&&
-     !!payload.session_id&&!!payload.exported_at&&
-     Array.isArray(payload.definitions?.components)&&payload.definitions.components.length===57&&
-     Array.isArray(payload.definitions?.scenarios)&&payload.definitions.scenarios.length===72&&
-     Array.isArray(payload.execution_results)&&
-     payload.execution_results.every(r=>!!r.execution_id&&!!r.session_id&&!!r.scenario_id&&
-       ["passed","failed","blocked"].includes(r.status)&&
-       !/[?#]/.test(r.page_url||""))&&
-     payload.execution_results.every(r=>r.session_id===payload.session_id);
+   if(!payload||payload.schema_version!=="3.0"||typeof payload.session_id!=="string"||!payload.session_id.trim())return false;
+   // Fixed schema contract: payload.definitions.components.length===57; payload.definitions.scenarios.length===72.
+   if(!Number.isFinite(Date.parse(payload.exported_at))||!Array.isArray(payload.definitions?.components)||payload.definitions.components.length!==57||!Array.isArray(payload.definitions?.scenarios)||payload.definitions.scenarios.length!==72||!Array.isArray(payload.execution_results))return false;
+   const componentIds=new Set(payload.definitions.components.map(c=>c?.id)); const scenarioIds=new Set(payload.definitions.scenarios.map(x=>x?.id));
+   if(componentIds.size!==57||!payload.definitions.components.every(c=>typeof c?.id==="string"&&/^CMP-\d{3}$/.test(c.id)))return false;
+   if(scenarioIds.size!==72||!payload.definitions.scenarios.every(x=>typeof x?.id==="string"&&/^SCN-(?:[A-Z]-\d{3}|CMP-\d{3}-DOM)$/.test(x.id)))return false;
+   const executionIds=new Set();
+   for(const r of payload.execution_results){
+     if(!r||typeof r.execution_id!=="string"||!r.execution_id.trim()||executionIds.has(r.execution_id))return false; executionIds.add(r.execution_id);
+     if(r.session_id!==payload.session_id||!scenarioIds.has(r.scenario_id)||!["passed","failed","blocked"].includes(r.status))return false;
+     const scenario=payload.definitions.scenarios.find(x=>x.id===r.scenario_id);
+     if(!scenario||r.component_id!==(scenario.component_id??null)||r.result_kind!==(scenario.component_scan?"inventory_scan":"scenario_execution"))return false;
+     if(!Number.isFinite(Date.parse(r.executed_at))||!r.viewport||!Number.isFinite(r.viewport.width)||r.viewport.width<=0||!Number.isFinite(r.viewport.height)||r.viewport.height<=0||!Number.isFinite(r.viewport.device_scale_factor)||r.viewport.device_scale_factor<=0)return false;
+     if(r.evidence_type!=="browser_assertion_metadata"||r.screenshot_captured!==false||typeof r.page_url!=="string"||/[?#]/.test(r.page_url))return false;
+     if(!r.evidence||typeof r.evidence!=="object"||Array.isArray(r.evidence))return false;
+   }
+   const summary=payload.summary; if(!summary||summary.component_count!==57||summary.scenario_count!==72||summary.execution_records!==payload.execution_results.length)return false;
+   const count=status=>payload.execution_results.filter(r=>r.status===status).length;
+   if(summary.scenario_passed!==count("passed")||summary.scenario_failed!==count("failed")||summary.scenario_blocked!==count("blocked"))return false;
+   if(summary.unique_scenarios_executed!==new Set(payload.execution_results.map(r=>r.scenario_id)).size||summary.inventory_scan_records!==payload.execution_results.filter(r=>r.result_kind==="inventory_scan").length)return false;
+   if(summary.behavioral_scenario_records!==payload.execution_results.filter(r=>r.result_kind==="scenario_execution").length||summary.security_simulation_records!==payload.execution_results.filter(r=>r.evidence?.simulation_only===true).length)return false;
+   if(payload.evidence_contract?.kind!=="browser_session_metadata_json"||payload.evidence_contract.screenshots_included!==false||payload.evidence_contract.network_requests_from_security_simulator!==0)return false;
+   try{const u=new URL(payload.page_url);if(u.search||u.hash)return false;}catch(_){return false;} return true;
  }; document.getElementById("qaRun403").addEventListener("click",()=>{const limit=qaNormalize403Limit(el("#qa403Limit").value);el("#qa403Output").textContent=`Stopped at configured threshold: ${limit} simulated 403 responses. No network requests were sent.`;qaRunScenario(qaById("SCN-S-002"));});
  document.getElementById("qaClearResults").addEventListener("click",()=>{
    qaResults.length=0;

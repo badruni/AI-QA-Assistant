@@ -293,5 +293,29 @@ class QAPlaygroundBrowserE2ETests(unittest.TestCase):
         )
 
 
+    def test_checkpoint_e_accessibility_scenario_and_export_metadata(self):
+        self.open_qa_lab()
+        self.page.locator('[data-qa-tab="accessibility"]').click()
+        self.page.locator("#qaAccessibilityList button").nth(2).click()
+        self.page.locator('[data-qa-tab="results"]').click()
+        with self.page.expect_download() as info: self.page.locator("#qaExport").click()
+        with open(info.value.path(),"r",encoding="utf-8") as handle: payload=json.load(handle)
+        record=next(x for x in payload["execution_results"] if x["scenario_id"]=="SCN-A-003")
+        self.assertEqual(record["evidence_type"],"browser_assertion_metadata"); self.assertIs(record["screenshot_captured"],False)
+        self.assertGreater(record["viewport"]["device_scale_factor"],0); self.assertIn("landmarks",record["evidence"])
+        self.assertIn("heading_outline",record["evidence"]); self.assertEqual(payload["summary"]["execution_records"],len(payload["execution_results"]))
+
+    def test_checkpoint_e_functional_tab_scenario_exports_as_behavioral(self):
+        self.open_qa_lab()
+        self.page.locator('[data-qa-tab="normal"]').click()
+        self.page.locator("#qaNormalList button").nth(2).click()
+        self.page.locator('[data-qa-tab="results"]').click()
+        with self.page.expect_download() as info: self.page.locator("#qaExport").click()
+        with open(info.value.path(),"r",encoding="utf-8") as handle: payload=json.load(handle)
+        record=next(x for x in payload["execution_results"] if x["scenario_id"]=="SCN-N-003")
+        self.assertEqual(record["result_kind"],"scenario_execution"); self.assertEqual(record["status"],"passed")
+        self.assertEqual(record["evidence_type"],"browser_assertion_metadata")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
