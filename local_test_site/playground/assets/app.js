@@ -1,4 +1,6 @@
 (() => {
+ const qaNormalize403Limit=value=>{const parsed=Number(value);return Math.max(1,Math.min(10,Number.isFinite(parsed)&&parsed!==0?Math.trunc(parsed):3));};
+  const QA_CHECKPOINT_D_FUNCTIONAL_V1=true;
  const root=document.documentElement;
  const qaLabPage=document.getElementById("qa-lab");
  const siteNavLinks=[...document.querySelectorAll("[data-site-nav]")];
@@ -37,10 +39,29 @@
    document.querySelector('meta[name="theme-color"]').content=root.dataset.theme==="dark"?"#0b0b0e":"#f4f5f8";
  });
  const drawer=document.getElementById("mobileDrawer"),scrim=document.getElementById("drawerScrim"),open=document.getElementById("menuOpen");
- const close=()=>{drawer.classList.remove("open");scrim.classList.remove("show");open.setAttribute("aria-expanded","false");};
- open.addEventListener("click",()=>{drawer.classList.add("open");scrim.classList.add("show");open.setAttribute("aria-expanded","true");});
+ const close=({restoreFocus=true}={})=>{
+   const wasOpen=drawer.classList.contains("open");
+   drawer.classList.remove("open");scrim.classList.remove("show");open.setAttribute("aria-expanded","false");
+   drawer.setAttribute("aria-hidden","true");drawer.setAttribute("inert","");
+   if(restoreFocus&&wasOpen)open.focus();
+ };
+ const openDrawer=()=>{
+   drawer.classList.add("open");scrim.classList.add("show");open.setAttribute("aria-expanded","true");
+   drawer.setAttribute("aria-hidden","false");drawer.removeAttribute("inert");
+   const first=drawer.querySelector("#menuClose, a[href]");
+   if(first)first.focus();
+ };
+ open.addEventListener("click",openDrawer);
+ drawer.addEventListener("keydown",event=>{
+   if(event.key!=="Tab")return;
+   const focusable=[...drawer.querySelectorAll('button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')].filter(el=>el.getClientRects().length>0);
+   if(!focusable.length){event.preventDefault();return;}
+   const first=focusable[0],last=focusable[focusable.length-1];
+   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+ });
  document.getElementById("menuClose").addEventListener("click",close);scrim.addEventListener("click",close);
- drawer.querySelectorAll("a").forEach(a=>a.addEventListener("click",close));
+ drawer.querySelectorAll("a").forEach(a=>a.addEventListener("click",()=>close({restoreFocus:false})));
 document.addEventListener("keydown",e=>{
    if(e.key==="Escape"){
      close();
@@ -1493,7 +1514,7 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
      const initial=qaInitialComponentState.find(item=>item.id===component.id);
      if(!initial)return;
      ["detection_status","detection_classification","detection_matches","detection_notes","detection_checked_at","expectation_status","expectation_notes","behavior_status","keyboard_equivalent_status"].forEach(key=>{
-       if(Object.prototype.hasOwnProperty.call(initial,key))component[key]=qaClone(initial[key]);
+       if(Object.prototype.hasOwnProperty.call(initial,key)&&initial[key]!==undefined)component[key]=qaClone(initial[key]);
        else delete component[key];
      });
    });
@@ -1534,10 +1555,13 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
  const qaById=id=>qaScenarios.find(x=>x.id===id);
  const qaSafeText=s=>String(s??"");
  const qaSetPane=name=>{
-   document.querySelectorAll("[data-qa-pane]").forEach(p=>p.classList.toggle("active",p.dataset.qaPane===name));
+   document.querySelectorAll("[data-qa-pane]").forEach(p=>{
+     const active=p.dataset.qaPane===name;p.classList.toggle("active",active);
+     p.hidden=!active;
+   });
    document.querySelectorAll("[data-qa-tab]").forEach(b=>{
      const active=b.dataset.qaTab===name;b.classList.toggle("active",active);
-     b.setAttribute("aria-selected",String(active));
+     b.setAttribute("aria-selected",String(active));b.tabIndex=active?0:-1;
    });
  };
  const qaRecordCard=(title,meta,description,action)=>{
@@ -1760,7 +1784,17 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
         evidence={original_search_value:originalValue,original_visible_items:originalCount,probe_query:"Accordion",probe_visible_items:probeCount,empty_query_visible_items:emptyCount,probe_restored_visible_items:restoredProbeCount,empty_input_event_dispatched:true,probe_restore_event_dispatched:true,restore_matches_probe:probeRestored};
         detail=pass?"Pencarian non-kosong difilter, query kosong diproses, lalu hasil probe dipulihkan dengan jumlah item yang sama.":"Pengujian empty search atau pemulihan query probe tidak memenuhi kriteria.";break;
       }
-      case "SCN-X-002": {const n=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));pass=n>=1&&n<=10;detail=`Threshold disanitasi menjadi ${n}; rentang aman 1–10.`;evidence.normalized_threshold=n;break;}
+      case "SCN-X-002": {
+        const input=el("#qa403Limit"),original=input.value,probes=["-5","11","3",""];
+        const expected=[1,10,3,3],observed=[];
+        probes.forEach(value=>{input.value=value;observed.push(qaNormalize403Limit(input.value));});
+        input.value=original;
+        pass=observed.every((value,index)=>value===expected[index]);
+        detail=pass?`Threshold valid. Observed: ${observed.join(", ")}.`:`Threshold tidak sesuai. Observed: ${observed.join(", ")}.`;
+        evidence={probe_inputs:probes,expected_values:expected,observed_values:observed,original_value_restored:input.value===original,simulation_only:true,network_requests:0};
+        break;
+
+      }
       case "SCN-X-003": executionStatus="blocked";detail="Tidak dijalankan: executor ini belum menginstrumentasi seluruh kanal network browser, sehingga tidak dapat membuktikan ketiadaan request.";evidence={verification:"not_instrumented",reason:"No network instrumentation"};break;
       case "SCN-A-001": {const nav=el('nav[aria-label="Navigasi utama"]');pass=!!nav&&!!nav.getAttribute("aria-label");detail=pass?"Primary navigation memiliki accessible name.":"Accessible name nav tidak ditemukan.";break;}
       case "SCN-A-002": {const tab=el('[data-qa-tab="overview"]');pass=!!tab&&tab.hasAttribute("aria-selected");detail=pass?"Tab mengumumkan aria-selected.":"State tab tidak ditemukan.";break;}
@@ -1768,7 +1802,7 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
       case "SCN-R-001": {const width=document.documentElement.scrollWidth,viewport=document.documentElement.clientWidth;pass=width<=viewport+1;detail=`Current viewport only: document ${width}px; viewport ${viewport}px.`;evidence={document_width:width,viewport_width:viewport,horizontal_overflow_px:Math.max(0,width-viewport),scope:"current_viewport_only"};break;}
       case "SCN-R-002": {const workbench=el("#qaWorkbench");if(!workbench){executionStatus="blocked";detail="QA Workbench tidak ditemukan.";break;}const r=workbench.getBoundingClientRect(),viewport=document.documentElement.clientWidth;pass=r.width<=viewport+1&&r.left>=-1&&r.right<=viewport+1;detail=`Current viewport only: Workbench left ${Math.round(r.left)}px, right ${Math.round(r.right)}px, width ${Math.round(r.width)}px; viewport ${viewport}px.`;evidence={left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),viewport_width:viewport,scope:"current_viewport_only"};break;}
       case "SCN-S-001": pass=true;detail="Tidak ada request eksternal yang dilakukan oleh security simulator.";evidence={simulation_only:true,network_requests:0};break;
-      case "SCN-S-002": {const limit=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));let count=0;while(count<limit)count++;pass=count===limit;detail=`Simulasi berhenti tepat pada batas ${limit} respons 403 (simulasi lokal, bukan HTTP request).`;evidence.simulated_403_count=count;evidence.configured_limit=limit;evidence.simulation_only=true;evidence.network_requests=0;break;}
+      case "SCN-S-002": {const limit=qaNormalize403Limit(el("#qa403Limit").value);let count=0;while(count<limit)count++;pass=count===limit;detail=`Simulasi berhenti tepat pada batas ${limit} respons 403 (simulasi lokal, bukan HTTP request).`;evidence.simulated_403_count=count;evidence.configured_limit=limit;evidence.simulation_only=true;evidence.network_requests=0;break;}
       default: executionStatus="blocked";detail="Belum ada executor yang didefinisikan untuk skenario ini.";
      }
      if(executionStatus!=="blocked")executionStatus=pass?"passed":"failed";
@@ -1822,7 +1856,18 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
    el("#qaComponentCount").textContent=qaComponents.length;el("#qaScenarioCount").textContent=qaScenarios.length;
    el("#qaExecutedCount").textContent=qaResults.length;el("#qaPassedCount").textContent=qaResults.filter(r=>r.status==="passed").length;const failed=qaResults.filter(r=>r.status==="failed").length;const blocked=qaResults.filter(r=>r.status==="blocked").length;const status=el("#qaResultStatus");if(status&&qaResults.length)status.textContent=`${qaResults.length} execution record(s) · ${failed} failed · ${blocked} blocked · session ${qaSessionId.slice(0,8)}.`;
  };
- document.querySelectorAll("[data-qa-tab]").forEach(b=>b.addEventListener("click",()=>qaSetPane(b.dataset.qaTab)));
+ document.querySelectorAll("[data-qa-tab]").forEach(b=>{
+   b.addEventListener("click",()=>qaSetPane(b.dataset.qaTab));
+   b.addEventListener("keydown",event=>{
+     const tabs=[...document.querySelectorAll("[data-qa-tab]")],index=tabs.indexOf(b);
+     let next=null;
+     if(event.key==="ArrowRight")next=(index+1)%tabs.length;
+     else if(event.key==="ArrowLeft")next=(index-1+tabs.length)%tabs.length;
+     else if(event.key==="Home")next=0;
+     else if(event.key==="End")next=tabs.length-1;
+     if(next!==null){event.preventDefault();tabs[next].focus();qaSetPane(tabs[next].dataset.qaTab);}
+   });
+ });
  document.querySelectorAll("[data-qa-jump]").forEach(b=>b.addEventListener("click",()=>qaSetPane(b.dataset.qaJump)));
  document.getElementById("qaCatalogSearch").addEventListener("input",e=>qaRenderCatalog(e.target.value));
  document.getElementById("qaScanCatalog").addEventListener("click",()=>{
@@ -1879,7 +1924,7 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
        ["passed","failed","blocked"].includes(r.status)&&
        !/[?#]/.test(r.page_url||""))&&
      payload.execution_results.every(r=>r.session_id===payload.session_id);
- }; document.getElementById("qaRun403").addEventListener("click",()=>{const limit=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));el("#qa403Output").textContent=`Stopped at configured threshold: ${limit} simulated 403 responses. No network requests were sent.`;qaRunScenario(qaById("SCN-S-002"));});
+ }; document.getElementById("qaRun403").addEventListener("click",()=>{const limit=qaNormalize403Limit(el("#qa403Limit").value);el("#qa403Output").textContent=`Stopped at configured threshold: ${limit} simulated 403 responses. No network requests were sent.`;qaRunScenario(qaById("SCN-S-002"));});
  document.getElementById("qaClearResults").addEventListener("click",()=>{
    qaResults.length=0;
    qaScenarios.forEach(s=>{s.status="not_run";s.actual_result=null;s.evidence_ref=null;s.last_verified=null;});

@@ -31,7 +31,7 @@
 |---:|---|---|---|---|---|
 | 1 | Header | **Implemented** | `index.html`: `.topbar`, `.main-nav`, `.top-actions`; CSS sticky header. | Desktop header and main navigation exist. QA Lab nav is not present. | Normal, Accessibility, Responsive |
 | 2 | Logo | **Implemented** | `.brand`, `.brand-name`, `.hero-brand`; local `mdz-logo.svg` also exists in assets. | Logo/brand treatment exists in header, hero and footer; image asset presence should be verified for actual usage. | Normal, Accessibility, Responsive |
-| 3 | Hamburger Menu | **Implemented** | `#menuOpen`, `#mobileDrawer`, `#menuClose`, `#drawerScrim`; JS open/close handlers. | Mobile drawer opens/closes and Escape handler calls close; focus management and inert background are not implemented. | Normal, Negative, Accessibility, Responsive |
+| 3 | Hamburger Menu | **Implemented** | `#menuOpen`, `#mobileDrawer`, `#menuClose`, `#drawerScrim`; JS open/close handlers. | Mobile drawer opens/closes; Escape closes it; focus moves into the drawer, is trapped while open, and returns to the opener on close. The drawer is marked `aria-hidden` and `inert` while closed. | Normal, Negative, Accessibility, Responsive |
 | 4 | Expandable Sidebar | **Not Implemented** | No expandable sidebar structure or dedicated JS behavior found. | Mobile drawer is not an expandable sidebar; do not count it as this component. | Normal, Negative, Accessibility, Responsive |
 | 5 | Overlay Navigation | **Partial** | Mobile drawer plus `.drawer-scrim` overlay on small screens. | Overlay exists for the mobile drawer only; no separate overlay navigation pattern or keyboard/focus treatment. | Normal, Negative, Accessibility, Responsive |
 | 6 | Bottom Navigation | **Not Implemented** | No bottom navigation markup or styles found. | No persistent bottom navigation component. | Normal, Accessibility, Responsive |
@@ -189,3 +189,6 @@ Catatan: tabel ini adalah kerangka requirement, bukan klaim bahwa semua komponen
 ## H. Standar Operasional Pengembangan
 
 Satu batch per tahap; perintah PowerShell siap salin; tunggu hasil sebelum melanjutkan; diagnosis error sebelum perubahan; backup sebelum perubahan signifikan; pertahankan fitur yang berfungsi; validasi setiap perubahan; dokumentasikan arsitektur/dependensi/cara menjalankan; jangan memindahkan virtualenv; jangan menyimpan secret; patuhi batas 403; jangan commit kecuali diminta; bedakan source inspection, browser observation, automated test, dan manual test.
+
+## Checkpoint D inventory reconciliation — 27 November 2026
+The current source registry contains **57 components** (21 implemented, 19 partial, 17 not implemented). This supersedes the historical 56-component baseline stated in earlier sections of this document; historical audit statements are retained as historical context. The current registry includes `CMP-057 Accordion`, whose source status remains `not_implemented`. No component status is changed by Checkpoint D.

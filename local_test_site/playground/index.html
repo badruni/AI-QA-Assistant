@@ -13,7 +13,7 @@
 </head>
 <body>
 <header class="topbar">
-  <button class="icon-btn mobile-menu" id="menuOpen" aria-label="Buka menu" aria-expanded="false">☰</button>
+  <button class="icon-btn mobile-menu" id="menuOpen" aria-label="Buka menu" aria-expanded="false" aria-controls="mobileDrawer">☰</button>
   <a class="brand" href="#home" aria-label="MyDreamZone Home">
     <span class="brand-name">MyDream<span>Zone</span><i class="checkers">▰▰</i></span>
     <small>AUTOMOTIVE · LIFESTYLE · COMMUNITY</small>
@@ -29,7 +29,7 @@
   </div>
 </header>
 
-<aside class="mobile-drawer" id="mobileDrawer" aria-label="Menu mobile">
+<aside class="mobile-drawer" id="mobileDrawer" aria-label="Menu mobile" aria-hidden="true" inert>
   <div class="drawer-head"><span class="brand-name">MyDream<span>Zone</span></span><button class="icon-btn" id="menuClose" aria-label="Tutup menu">×</button></div>
   <a href="#home" data-site-nav>Home</a><a href="#articles" data-site-nav>Articles</a><a href="#events" data-site-nav>Events</a><a href="#gallery" data-site-nav>Gallery</a><a href="#community" data-site-nav>Community</a><a href="#qa-lab" data-qa-nav>QA Lab</a>
   <p>BUILD · TUNE · RACE · TOGETHER</p>
@@ -136,18 +136,18 @@
         <article><span>Checks Passed</span><strong id="qaPassedCount">0</strong></article>
       </div>
       <p class="qa-summary-note">Checks Passed menghitung skenario yang memenuhi ekspektasi. Untuk DOM scan, ini hanya kecocokan inventaris — bukan bukti perilaku komponen lulus.</p>
-      <nav class="qa-workbench-tabs" aria-label="QA Workbench sections">
-        <button type="button" class="active" data-qa-tab="overview">Overview</button>
-        <button type="button" data-qa-tab="catalog">Component Catalog</button>
-        <button type="button" data-qa-tab="normal">Normal</button>
-        <button type="button" data-qa-tab="negative">Negative</button>
-        <button type="button" data-qa-tab="accessibility">Accessibility</button>
-        <button type="button" data-qa-tab="responsive">Responsive</button>
-        <button type="button" data-qa-tab="security">Security</button>
-        <button type="button" data-qa-tab="results">Evidence & Regression</button>
+      <nav class="qa-workbench-tabs" role="tablist" aria-label="QA Workbench sections">
+        <button type="button" role="tab" id="qaTabOverview" aria-controls="qaPaneOverview" aria-selected="true" tabindex="0" data-qa-tab="overview">Overview</button>
+        <button type="button" role="tab" id="qaTabCatalog" aria-controls="qaPaneCatalog" aria-selected="false" tabindex="-1" data-qa-tab="catalog">Component Catalog</button>
+        <button type="button" role="tab" id="qaTabNormal" aria-controls="qaPaneNormal" aria-selected="false" tabindex="-1" data-qa-tab="normal">Normal</button>
+        <button type="button" role="tab" id="qaTabNegative" aria-controls="qaPaneNegative" aria-selected="false" tabindex="-1" data-qa-tab="negative">Negative</button>
+        <button type="button" role="tab" id="qaTabAccessibility" aria-controls="qaPaneAccessibility" aria-selected="false" tabindex="-1" data-qa-tab="accessibility">Accessibility</button>
+        <button type="button" role="tab" id="qaTabResponsive" aria-controls="qaPaneResponsive" aria-selected="false" tabindex="-1" data-qa-tab="responsive">Responsive</button>
+        <button type="button" role="tab" id="qaTabSecurity" aria-controls="qaPaneSecurity" aria-selected="false" tabindex="-1" data-qa-tab="security">Security</button>
+        <button type="button" role="tab" id="qaTabResults" aria-controls="qaPaneResults" aria-selected="false" tabindex="-1" data-qa-tab="results">Evidence & Regression</button>
       </nav>
       <div class="qa-workbench-content">
-        <section class="qa-pane active" data-qa-pane="overview">
+        <section class="qa-pane active" role="tabpanel" id="qaPaneOverview" aria-labelledby="qaTabOverview" tabindex="0" data-qa-pane="overview">
           <h3>Execution overview</h3><p class="qa-muted">Pilih lab untuk melihat skenario yang tersedia. Safe checks hanya memeriksa DOM dan perilaku lokal yang telah ditentukan.</p>
           <div class="qa-overview-grid">
             <button data-qa-jump="catalog">Component Catalog <small>Inventaris komponen terdaftar</small></button>
@@ -159,27 +159,27 @@
           </div>
           <p class="qa-safety-note"><strong>Safety boundary:</strong> Security Lab tidak mengirim request ke website eksternal, tidak melakukan bypass kontrol keamanan, dan tidak menguji sistem di luar localhost.</p>
         </section>
-        <section class="qa-pane" data-qa-pane="catalog">
+        <section class="qa-pane" role="tabpanel" id="qaPaneCatalog" aria-labelledby="qaTabCatalog" tabindex="0" data-qa-pane="catalog" hidden>
           <div class="qa-pane-toolbar"><h3>Component Catalog</h3><div class="qa-catalog-tools"><input id="qaCatalogSearch" type="search" placeholder="Cari komponen…" aria-label="Cari komponen"><button type="button" class="qa-action" id="qaScanCatalog">Scan DOM catalog</button></div></div><p id="qaCatalogScanStatus" class="qa-muted" aria-live="polite">57 components · belum dipindai.</p>
           <div id="qaCatalogList" class="qa-record-list"></div>
         </section>
-        <section class="qa-pane" data-qa-pane="normal">
+        <section class="qa-pane" role="tabpanel" id="qaPaneNormal" aria-labelledby="qaTabNormal" tabindex="0" data-qa-pane="normal" hidden>
           <h3>Normal Scenarios</h3><p class="qa-muted">Validasi komponen dan navigasi dalam kondisi penggunaan standar.</p><div id="qaNormalList" class="qa-record-list"></div>
         </section>
-        <section class="qa-pane" data-qa-pane="negative">
+        <section class="qa-pane" role="tabpanel" id="qaPaneNegative" aria-labelledby="qaTabNegative" tabindex="0" data-qa-pane="negative" hidden>
           <h3>Negative Test Lab</h3><p class="qa-muted">Semua skenario negatif bersifat simulasi dan terisolasi di dalam QA Workbench.</p><div id="qaNegativeList" class="qa-record-list"></div>
         </section>
-        <section class="qa-pane" data-qa-pane="accessibility">
+        <section class="qa-pane" role="tabpanel" id="qaPaneAccessibility" aria-labelledby="qaTabAccessibility" tabindex="0" data-qa-pane="accessibility" hidden>
           <h3>Accessibility Lab</h3><p class="qa-muted">Pemeriksaan otomatis dasar; bukan pengganti audit manual dengan assistive technology.</p><div id="qaAccessibilityList" class="qa-record-list"></div>
         </section>
-        <section class="qa-pane" data-qa-pane="responsive">
+        <section class="qa-pane" role="tabpanel" id="qaPaneResponsive" aria-labelledby="qaTabResponsive" tabindex="0" data-qa-pane="responsive" hidden>
           <h3>Responsive Lab</h3><p class="qa-muted">Pemeriksaan viewport aktif, document overflow, dan elemen layout.</p><div id="qaResponsiveList" class="qa-record-list"></div>
         </section>
-        <section class="qa-pane" data-qa-pane="security">
+        <section class="qa-pane" role="tabpanel" id="qaPaneSecurity" aria-labelledby="qaTabSecurity" tabindex="0" data-qa-pane="security" hidden>
           <h3>Security Behavior Lab</h3><p class="qa-muted">Simulasi lokal tanpa request jaringan. Hasilnya bukan sertifikasi keamanan.</p><div id="qaSecurityList" class="qa-record-list"></div>
           <div class="qa-security-sim"><label for="qa403Limit">Batas simulasi 403</label><input id="qa403Limit" type="number" min="1" max="10" value="3"><button type="button" class="qa-action" id="qaRun403">Run local 403 simulation</button><output id="qa403Output" aria-live="polite">Belum dijalankan.</output></div>
         </section>
-        <section class="qa-pane" data-qa-pane="results">
+        <section class="qa-pane" role="tabpanel" id="qaPaneResults" aria-labelledby="qaTabResults" tabindex="0" data-qa-pane="results" hidden>
           <h3>Evidence & Regression</h3><p class="qa-muted">Hasil aktual sesi browser ini. Export menghasilkan JSON yang dapat disimpan sebagai evidence.</p>
           <div class="qa-result-toolbar"><button type="button" class="qa-action secondary" id="qaClearResults">Clear session results</button><span id="qaResultStatus" role="status">Belum ada skenario dijalankan.</span></div>
           <div id="qaResultsList" class="qa-record-list"></div>
@@ -229,7 +229,7 @@
   </div>
 </section>
 
-<footer class="site-footer">
+<footer class="site-footer" id="footer">
   <a class="brand footer-brand" href="#home"><span class="brand-name">MyDream<span>Zone</span><i class="checkers">▰▰</i></span><small>AUTOMOTIVE · LIFESTYLE · COMMUNITY</small></a>
   <div class="social-links" aria-label="Social media"><a href="#footer" aria-label="YouTube">▶</a><a href="#footer" aria-label="Instagram">◎</a><a href="#footer" aria-label="TikTok">♪</a><a href="#footer" aria-label="Facebook">f</a></div>
   <nav class="footer-links"><a href="#footer">About</a><a href="#footer">Terms</a><a href="#footer">Privacy</a><a href="#footer">Contact</a></nav>
