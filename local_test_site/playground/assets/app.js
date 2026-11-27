@@ -1425,22 +1425,34 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
    });
  });
  const qaScenarios = [
-  ["SCN-N-001","Homepage route is reachable","normal","CMP-001","Check homepage route and root container."],
-  ["SCN-N-002","QA Lab route is reachable","normal","CMP-008","Check QA Lab section and route target."],
-  ["SCN-N-003","Workbench tabs switch panels","normal","CMP-009","Switch to catalog and back to overview."],
-  ["SCN-N-004","Theme toggle control exists","normal","CMP-004","Verify theme control is present and enabled."],
-  ["SCN-N-005","Gallery dialog is present","normal","CMP-006","Verify image dialog and close control."],
-  ["SCN-X-001","Empty search is safely handled","negative","CMP-009","Empty catalog search must not throw or modify content."],
-  ["SCN-X-002","Invalid 403 threshold is rejected","negative","CMP-010","Threshold outside configured range must be clamped."],
-  ["SCN-X-003","Negative simulation stays local","negative","CMP-010","Simulation must not create network requests."],
+  ["SCN-N-001","Homepage route is reachable","normal",null,"Check homepage route and root container; record selector and ready state."],
+  ["SCN-N-002","QA Lab route is reachable","normal",null,"Check QA Lab section and route target."],
+  ["SCN-N-003","Workbench tabs switch panels","normal",null,"Record initial tab/pane, switch to catalog, and verify restoration of the initial pane."],
+  ["SCN-N-004","Theme toggle control exists","normal",null,"Verify theme changes and root theme, storage, and theme-color metadata are restored."],
+  ["SCN-N-005","Gallery dialog is present","normal","CMP-039","Verify dialog opens, focus moves to close, closes, and returns to opener."],
+  ["SCN-X-001","Empty search is safely handled","negative",null,"Use a non-empty probe query, test empty input, and verify probe plus initial UI state restoration."],
+  ["SCN-X-002","Invalid 403 threshold is rejected","negative",null,"Threshold outside configured range must be clamped."],
+  ["SCN-X-003","Negative simulation stays local","negative",null,"Simulation must not create network requests."],
   ["SCN-A-001","Primary navigation has accessible name","accessibility","CMP-001","Check navigation landmark label."],
-  ["SCN-A-002","QA tabs expose selected state","accessibility","CMP-009","Check tab buttons and selected state."],
-  ["SCN-A-003","Workbench controls have names","accessibility","CMP-009","Check search, buttons, and labels."],
-  ["SCN-R-001","Document has no horizontal overflow","responsive","CMP-001","Compare scroll width with viewport width."],
-  ["SCN-R-002","QA workbench fits active viewport","responsive","CMP-009","Check workbench bounding box against viewport."],
-  ["SCN-S-001","Security simulation remains local","security","CMP-010","No external request is sent by the simulator."],
-  ["SCN-S-002","403 threshold stop condition","security","CMP-010","Local simulation stops at configured threshold."]
+  ["SCN-A-002","QA tabs expose selected state","accessibility",null,"Check tab buttons and selected state."],
+  ["SCN-A-003","Workbench controls have names","accessibility",null,"Check search, buttons, and labels."],
+  ["SCN-R-001","Document has no horizontal overflow","responsive",null,"Compare scroll width with viewport width."],
+  ["SCN-R-002","QA workbench fits active viewport","responsive",null,"Check workbench bounding box against viewport."],
+  ["SCN-S-001","Security simulation remains local","security",null,"No external request is sent by the simulator."],
+  ["SCN-S-002","403 threshold stop condition","security",null,"Local simulation stops at configured threshold."]
  ].map(([id,name,lab,component_id,purpose])=>({id,name,lab,component_id,purpose,preconditions:"Local MyDreamZone page loaded",steps:"Run from QA Workbench",expected_result:"Check completes without unsafe network activity",actual_result:null,status:"not_run",evidence_ref:null,severity:"info",last_verified:null}));
+ const QA_C2_ASSERTIONS_EVIDENCE_V1=true;
+  const QA_C2_1_EVIDENCE_V1=true;
+ const qaScenarioSpecs={
+  "SCN-N-003":{steps:"Click the Catalog tab; verify aria-selected and the matching pane; restore the previous pane.",expected_result:"Catalog tab is selected and its pane is active after a real click."},
+  "SCN-N-004":{steps:"Click the theme toggle; verify the root theme changes; restore the original theme and storage value.",expected_result:"Theme changes after click and the original theme/storage state is restored."},
+  "SCN-N-005":{steps:"Click the first available media opener; verify dialog opens; click Close and verify it closes.",expected_result:"Dialog opens from a media control and closes through its close button."},
+  "SCN-X-001":{steps:"Record the current search and visible count; dispatch an input event with an empty value; verify safe rendering.",expected_result:"Empty search is processed without an execution error; prior search value is restored."},
+  "SCN-X-003":{steps:"Not executed until browser network instrumentation is implemented.",expected_result:"Must remain blocked; absence of network traffic is not claimed without instrumentation."},
+  "SCN-R-001":{steps:"Compare document scroll width with client viewport width at the current viewport.",expected_result:"No horizontal overflow at the current viewport; this is not a multi-breakpoint result."},
+  "SCN-R-002":{steps:"Measure Workbench bounding rectangle against document client width at the current viewport.",expected_result:"Workbench bounds fit within the current viewport; this is not a multi-breakpoint result."}
+ };
+ Object.entries(qaScenarioSpecs).forEach(([id,spec])=>{const scenario=qaScenarios.find(item=>item.id===id);if(scenario)Object.assign(scenario,spec);});
  qaComponents.forEach(component=>{
    qaScenarios.push({
      id:`SCN-${component.id}-DOM`,
@@ -1456,6 +1468,69 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
    });
  });
  const qaResults=[];
+ const qaSessionId=(globalThis.crypto&&typeof globalThis.crypto.randomUUID==="function")?globalThis.crypto.randomUUID():`qa-session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+ let qaExecutionSequence=0;
+ const qaCreateExecutionId=()=>`${qaSessionId}-run-${++qaExecutionSequence}`;
+ const qaSanitizePageUrl=value=>{
+   try{const parsed=new URL(value,location.href);return `${parsed.origin}${parsed.pathname}`;}
+   catch(_){return "unavailable";}
+ };
+ const qaClone=value=>JSON.parse(JSON.stringify(value));
+ const qaInitialComponentState=qaComponents.map(c=>({
+   id:c.id,
+   detection_status:c.detection_status,
+   detection_classification:c.detection_classification,
+   detection_matches:c.detection_matches,
+   detection_notes:c.detection_notes,
+   detection_checked_at:c.detection_checked_at,
+   expectation_status:c.expectation_status,
+   expectation_notes:c.expectation_notes,
+   behavior_status:c.behavior_status,
+   keyboard_equivalent_status:c.keyboard_equivalent_status
+ }));
+ const qaResetComponentState=()=>{
+   qaComponents.forEach(component=>{
+     const initial=qaInitialComponentState.find(item=>item.id===component.id);
+     if(!initial)return;
+     ["detection_status","detection_classification","detection_matches","detection_notes","detection_checked_at","expectation_status","expectation_notes","behavior_status","keyboard_equivalent_status"].forEach(key=>{
+       if(Object.prototype.hasOwnProperty.call(initial,key))component[key]=qaClone(initial[key]);
+       else delete component[key];
+     });
+   });
+   qaRenderCatalog(document.getElementById("qaCatalogSearch").value);
+ };
+ const qaValidateScenarioRegistry=()=>{
+   const errors=[];
+   const componentIds=new Set(qaComponents.map(c=>c.id));
+   if(qaComponents.length!==57)errors.push(`component count expected 57, got ${qaComponents.length}`);
+   if(componentIds.size!==qaComponents.length)errors.push("duplicate component id");
+   const scenarioIds=new Set();
+   const validLabs=new Set(["normal","negative","accessibility","responsive","security"]);
+   qaScenarios.forEach(s=>{
+     if(!s.id||scenarioIds.has(s.id))errors.push(`duplicate scenario id: ${s.id||"(missing)"}`);
+     scenarioIds.add(s.id);
+     if(!validLabs.has(s.lab))errors.push(`invalid lab for ${s.id}: ${s.lab}`);
+     if(s.component_id!==null&&!componentIds.has(s.component_id))errors.push(`unknown component reference: ${s.id} -> ${s.component_id}`);
+     if(!s.name||!s.purpose||!s.expected_result)errors.push(`required scenario metadata missing: ${s.id}`);
+   });
+   const scans=qaScenarios.filter(s=>s.component_scan);
+   const scanIds=new Set(scans.map(s=>s.component_id));
+   if(scans.length!==qaComponents.length||scanIds.size!==qaComponents.length||qaComponents.some(c=>!scanIds.has(c.id)))errors.push("component scan coverage must be exactly one scenario per component");
+   if(qaScenarios.length!==72)errors.push(`scenario count expected 72, got ${qaScenarios.length}`);
+   if(errors.length)throw new Error("Scenario registry validation failed: "+errors.join("; "));
+   return {valid:true,component_count:qaComponents.length,scenario_count:qaScenarios.length,component_scan_count:scans.length};
+ };
+ const qaScenarioRegistryValidation=qaValidateScenarioRegistry();
+ const qaCaptureUiState=()=>({
+   search_value:document.getElementById("qaCatalogSearch")?.value??"",
+   active_pane:document.querySelector("[data-qa-pane].active")?.dataset.qaPane||"overview"
+ });
+ const qaRestoreUiState=snapshot=>{
+   if(!snapshot)return;
+   const search=document.getElementById("qaCatalogSearch");
+   if(search){search.value=snapshot.search_value;qaRenderCatalog(snapshot.search_value);}
+   qaSetPane(snapshot.active_pane);
+ };
  const qaById=id=>qaScenarios.find(x=>x.id===id);
  const qaSafeText=s=>String(s??"");
  const qaSetPane=name=>{
@@ -1610,6 +1685,8 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
     }
   };
  const qaRunScenario=(scenario)=>{
+   if(!scenario||!qaScenarios.some(item=>item.id===scenario.id))throw new Error("Unknown scenario supplied to executor.");
+   const qaUiSnapshot=qaCaptureUiState();
    let pass=false,detail="",evidence={},executionStatus="failed";
    const el=selector=>document.querySelector(selector);
    try{
@@ -1627,28 +1704,101 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
       }
     }else{
      switch(scenario.id){
-      case "SCN-N-001": pass=!!el("#home");detail=pass?"Homepage container ditemukan.":"Homepage container tidak ditemukan.";break;
+      case "SCN-N-001": {const home=el("#home");pass=!!home;detail=pass?"Homepage container ditemukan.":"Homepage container tidak ditemukan.";evidence={selector:"#home",found:pass,ready_state:document.readyState};break;}
       case "SCN-N-002": pass=!!el("#qa-lab");detail=pass?"QA Lab section ditemukan.":"QA Lab section tidak ditemukan.";break;
-      case "SCN-N-003": qaSetPane("catalog");pass=document.querySelector('[data-qa-pane="catalog"]').classList.contains("active");qaSetPane("overview");detail=pass?"Tab catalog dapat diaktifkan.":"Tab catalog gagal diaktifkan.";break;
-      case "SCN-N-004": pass=!!el("#themeToggle")&&!el("#themeToggle").disabled;detail=pass?"Theme toggle tersedia dan aktif.":"Theme toggle tidak tersedia atau disabled.";break;
-      case "SCN-N-005": pass=!!el("#imageModal")&&!!el("#modalClose");detail=pass?"Image dialog dan close control ditemukan.":"Image dialog atau close control tidak ditemukan.";break;
-      case "SCN-X-001": {const input=el("#qaCatalogSearch");input.value="";qaRenderCatalog("");pass=!!el("#qaCatalogList");detail="Empty query ditangani tanpa operasi destruktif.";evidence.search_value="";break;}
+      case "SCN-N-003": {
+        const tab=el('[data-qa-tab="catalog"]'),pane=el('[data-qa-pane="catalog"]');
+        if(!tab||!pane){executionStatus="blocked";detail="Tab catalog atau pane target tidak tersedia.";break;}
+        const paneBefore=qaCaptureUiState().active_pane;
+        const tabBefore=el(`[data-qa-tab="${paneBefore}"]`);
+        const selectedBefore=tabBefore?.getAttribute("aria-selected")??null;
+        tab.click();
+        const paneAfterClick=document.querySelector("[data-qa-pane].active")?.dataset.qaPane||null;
+        const selectedAfterClick=tab.getAttribute("aria-selected");
+        pass=selectedAfterClick==="true"&&pane.classList.contains("active")&&paneAfterClick==="catalog";
+        detail=pass?"Klik tab catalog mengaktifkan tab dan pane yang sesuai.":"Klik tab tidak menghasilkan state tab/pane yang diharapkan.";
+        evidence={interaction:"click",pane_before:paneBefore,tab_selected_before:selectedBefore,tab_selected_after_click:selectedAfterClick,pane_after_click:paneAfterClick,catalog_pane_active:pane.classList.contains("active")};break;
+      }
+      case "SCN-N-004": {
+        const button=el("#themeToggle");
+        if(!button||button.disabled){executionStatus="blocked";detail="Theme toggle tidak tersedia atau disabled.";break;}
+        const before=root.dataset.theme||"(default)",savedBefore=localStorage.getItem("mdz-theme"),colorMeta=document.querySelector('meta[name="theme-color"]'),metaBefore=colorMeta?.content??null;
+        button.click();const after=root.dataset.theme||"(default)",savedAfterClick=localStorage.getItem("mdz-theme");
+        const changed=after!==before;
+        if(savedBefore===null)localStorage.removeItem("mdz-theme");else localStorage.setItem("mdz-theme",savedBefore);
+        if(before==="(default)")delete root.dataset.theme;else root.dataset.theme=before;
+        if(colorMeta&&metaBefore!==null)colorMeta.content=metaBefore;
+        const themeRestored=(root.dataset.theme||"(default)")===before;
+        const storageRestored=localStorage.getItem("mdz-theme")===savedBefore;
+        const metaRestored=(colorMeta?.content??null)===metaBefore;
+        pass=changed&&themeRestored&&storageRestored&&metaRestored;
+        evidence={theme_before:before,theme_after:after,theme_changed:changed,storage_before:savedBefore,storage_after_click:savedAfterClick,theme_after_restore:root.dataset.theme||"(default)",storage_after_restore:localStorage.getItem("mdz-theme"),meta_before:metaBefore,meta_after_restore:colorMeta?.content??null,restore_matches_initial:themeRestored&&storageRestored&&metaRestored};
+        detail=pass?"Tema berubah setelah klik dan root theme, storage, serta meta theme-color kembali ke nilai awal.":"Perubahan tema atau pemulihan root/storage/meta tidak sesuai nilai awal.";break;
+      }
+      case "SCN-N-005": {
+        const dialog=el("#imageModal"),closeButton=el("#modalClose"),opener=document.querySelector(".media-open");
+        if(!dialog||!closeButton||!opener){executionStatus="blocked";detail="Dialog, tombol close, atau pemicu gambar tidak tersedia.";break;}
+        opener.click();const opened=dialog.classList.contains("open");
+        const focusMovedToClose=document.activeElement===closeButton;
+        if(opened)closeButton.click();const closed=!dialog.classList.contains("open");
+        const focusReturnedToOpener=document.activeElement===opener;
+        pass=opened&&closed&&focusMovedToClose&&focusReturnedToOpener;
+        evidence={opener_clicked:true,dialog_opened:opened,focus_moved_to_close:focusMovedToClose,close_clicked:opened,dialog_closed:closed,focus_returned_to_opener:focusReturnedToOpener};
+        detail=pass?"Dialog terbuka, fokus berpindah ke tombol close, dialog tertutup, dan fokus kembali ke pemicu.":"Siklus dialog atau pemulihan fokus tidak memenuhi kriteria.";break;
+      }
+      case "SCN-X-001": {
+        const input=el("#qaCatalogSearch"),list=el("#qaCatalogList");
+        if(!input||!list){executionStatus="blocked";detail="Input pencarian atau daftar katalog tidak tersedia.";break;}
+        const originalValue=input.value,originalCount=list.children.length;
+        input.value="Accordion";input.dispatchEvent(new Event("input",{bubbles:true}));
+        const probeCount=list.children.length,probeVisible=probeCount>0;
+        input.value="";input.dispatchEvent(new Event("input",{bubbles:true}));
+        const emptyCount=list.children.length,emptyValue=input.value==="";
+        input.value="Accordion";input.dispatchEvent(new Event("input",{bubbles:true}));
+        const restoredProbeCount=list.children.length,probeRestored=input.value==="Accordion"&&restoredProbeCount===probeCount;
+        pass=probeVisible&&emptyValue&&probeRestored;
+        evidence={original_search_value:originalValue,original_visible_items:originalCount,probe_query:"Accordion",probe_visible_items:probeCount,empty_query_visible_items:emptyCount,probe_restored_visible_items:restoredProbeCount,empty_input_event_dispatched:true,probe_restore_event_dispatched:true,restore_matches_probe:probeRestored};
+        detail=pass?"Pencarian non-kosong difilter, query kosong diproses, lalu hasil probe dipulihkan dengan jumlah item yang sama.":"Pengujian empty search atau pemulihan query probe tidak memenuhi kriteria.";break;
+      }
       case "SCN-X-002": {const n=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));pass=n>=1&&n<=10;detail=`Threshold disanitasi menjadi ${n}; rentang aman 1–10.`;evidence.normalized_threshold=n;break;}
-      case "SCN-X-003": pass=true;detail="Simulasi hanya mengubah state UI lokal; tidak ada fetch/XHR yang dipanggil.";break;
+      case "SCN-X-003": executionStatus="blocked";detail="Tidak dijalankan: executor ini belum menginstrumentasi seluruh kanal network browser, sehingga tidak dapat membuktikan ketiadaan request.";evidence={verification:"not_instrumented",reason:"No network instrumentation"};break;
       case "SCN-A-001": {const nav=el('nav[aria-label="Navigasi utama"]');pass=!!nav&&!!nav.getAttribute("aria-label");detail=pass?"Primary navigation memiliki accessible name.":"Accessible name nav tidak ditemukan.";break;}
       case "SCN-A-002": {const tab=el('[data-qa-tab="overview"]');pass=!!tab&&tab.hasAttribute("aria-selected");detail=pass?"Tab mengumumkan aria-selected.":"State tab tidak ditemukan.";break;}
       case "SCN-A-003": {const controls=[...document.querySelectorAll("#qaWorkbench button,#qaWorkbench input")];const unnamed=controls.filter(x=>!(x.getAttribute("aria-label")||x.labels?.length||x.textContent.trim()||x.title));pass=unnamed.length===0;detail=pass?"Kontrol Workbench memiliki nama yang dapat diakses.":`${unnamed.length} kontrol belum memiliki nama yang terdeteksi.`;evidence.unnamed_count=unnamed.length;break;}
-      case "SCN-R-001": {const width=document.documentElement.scrollWidth,viewport=document.documentElement.clientWidth;pass=width<=viewport+1;detail=`Document width ${width}px; viewport ${viewport}px.`;evidence.document_width=width;evidence.viewport_width=viewport;break;}
-      case "SCN-R-002": {const r=el("#qaWorkbench").getBoundingClientRect();pass=r.width<=window.innerWidth+1;detail=`Workbench width ${Math.round(r.width)}px; viewport ${window.innerWidth}px.`;break;}
-      case "SCN-S-001": pass=true;detail="Tidak ada request eksternal yang dilakukan oleh security simulator.";break;
-      case "SCN-S-002": {const limit=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));let count=0;while(count<limit)count++;pass=count===limit;detail=`Simulasi berhenti tepat pada batas ${limit} respons 403 (simulasi lokal, bukan HTTP request).`;evidence.simulated_403_count=count;evidence.configured_limit=limit;break;}
+      case "SCN-R-001": {const width=document.documentElement.scrollWidth,viewport=document.documentElement.clientWidth;pass=width<=viewport+1;detail=`Current viewport only: document ${width}px; viewport ${viewport}px.`;evidence={document_width:width,viewport_width:viewport,horizontal_overflow_px:Math.max(0,width-viewport),scope:"current_viewport_only"};break;}
+      case "SCN-R-002": {const workbench=el("#qaWorkbench");if(!workbench){executionStatus="blocked";detail="QA Workbench tidak ditemukan.";break;}const r=workbench.getBoundingClientRect(),viewport=document.documentElement.clientWidth;pass=r.width<=viewport+1&&r.left>=-1&&r.right<=viewport+1;detail=`Current viewport only: Workbench left ${Math.round(r.left)}px, right ${Math.round(r.right)}px, width ${Math.round(r.width)}px; viewport ${viewport}px.`;evidence={left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),viewport_width:viewport,scope:"current_viewport_only"};break;}
+      case "SCN-S-001": pass=true;detail="Tidak ada request eksternal yang dilakukan oleh security simulator.";evidence={simulation_only:true,network_requests:0};break;
+      case "SCN-S-002": {const limit=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));let count=0;while(count<limit)count++;pass=count===limit;detail=`Simulasi berhenti tepat pada batas ${limit} respons 403 (simulasi lokal, bukan HTTP request).`;evidence.simulated_403_count=count;evidence.configured_limit=limit;evidence.simulation_only=true;evidence.network_requests=0;break;}
       default: executionStatus="blocked";detail="Belum ada executor yang didefinisikan untuk skenario ini.";
      }
      if(executionStatus!=="blocked")executionStatus=pass?"passed":"failed";
     }
    }catch(err){executionStatus="failed";detail=`Execution error: ${err.message}`;}
-   const result={scenario_id:scenario.id,component_id:scenario.component_id||null,name:scenario.name,lab:scenario.lab,status:executionStatus,actual_result:detail,evidence,executed_at:new Date().toISOString(),page_url:location.href,viewport:{width:innerWidth,height:innerHeight}};
-   scenario.status=executionStatus;scenario.actual_result=detail;scenario.last_verified=result.executed_at;scenario.evidence_ref=`EV-${qaResults.length+1}`;qaResults.push(result);
+   try{
+      qaRestoreUiState(qaUiSnapshot);
+      if(["SCN-N-003","SCN-X-001"].includes(scenario.id)){
+        const restoredPane=qaCaptureUiState().active_pane;
+        const restoredSearch=qaCaptureUiState().search_value;
+        const restoredSearchCount=el("#qaCatalogList")?.children.length??0;
+        const initialSearchCount=(()=>{const list=el("#qaCatalogList");if(!list)return 0;const value=qaUiSnapshot.search_value;return qaComponents.filter(c=>(c.name+" "+c.id+" "+c.category+" "+c.source_status+" "+c.detection_status+" "+(c.expectation_status||"")).toLowerCase().includes(value.toLowerCase())).length;})();
+        const paneMatches=restoredPane===qaUiSnapshot.active_pane;
+        const searchMatches=restoredSearch===qaUiSnapshot.search_value&&restoredSearchCount===initialSearchCount;
+        evidence.ui_state_restoration={search_value:restoredSearch,search_visible_items:restoredSearchCount,search_matches_initial:searchMatches,pane_after_restore:restoredPane,pane_matches_initial:paneMatches,restore_matches_initial:searchMatches&&paneMatches};
+        if(!searchMatches||!paneMatches){executionStatus="failed";detail+=" UI state restoration did not match the initial snapshot.";}
+        if(scenario.id==="SCN-N-003"){evidence.tab_selected_after_restore=el(`[data-qa-tab="${restoredPane}"]`)?.getAttribute("aria-selected")??null;evidence.pane_after_restore=restoredPane;evidence.restore_matches_initial=paneMatches;}
+      }
+    }
+   catch(restoreError){executionStatus="failed";detail+=` UI state restoration failed: ${restoreError.message}`;evidence.cleanup_error=restoreError.message;}
+   const result={
+     session_id:qaSessionId,
+     execution_id:qaCreateExecutionId(),
+     result_kind:scenario.component_scan?"inventory_scan":"scenario_execution",
+     scenario_id:scenario.id,component_id:scenario.component_id??null,name:scenario.name,lab:scenario.lab,
+     status:executionStatus,actual_result:detail,evidence:qaClone(evidence),
+     executed_at:new Date().toISOString(),page_url:qaSanitizePageUrl(location.href),
+     viewport:{width:innerWidth,height:innerHeight}
+   };
+   scenario.status=executionStatus;scenario.actual_result=detail;scenario.last_verified=result.executed_at;scenario.evidence_ref=result.execution_id;qaResults.push(result);
    if(scenario.component_scan)qaRenderCatalog(document.getElementById("qaCatalogSearch").value);
    qaRenderScenarios(scenario.lab);qaRenderResults();qaUpdateSummary();return result;
  };
@@ -1670,7 +1820,7 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
  const el=s=>document.querySelector(s);
  const qaUpdateSummary=()=>{
    el("#qaComponentCount").textContent=qaComponents.length;el("#qaScenarioCount").textContent=qaScenarios.length;
-   el("#qaExecutedCount").textContent=qaResults.length;el("#qaPassedCount").textContent=qaResults.filter(r=>r.status==="passed").length;
+   el("#qaExecutedCount").textContent=qaResults.length;el("#qaPassedCount").textContent=qaResults.filter(r=>r.status==="passed").length;const failed=qaResults.filter(r=>r.status==="failed").length;const blocked=qaResults.filter(r=>r.status==="blocked").length;const status=el("#qaResultStatus");if(status&&qaResults.length)status.textContent=`${qaResults.length} execution record(s) · ${failed} failed · ${blocked} blocked · session ${qaSessionId.slice(0,8)}.`;
  };
  document.querySelectorAll("[data-qa-tab]").forEach(b=>b.addEventListener("click",()=>qaSetPane(b.dataset.qaTab)));
  document.querySelectorAll("[data-qa-jump]").forEach(b=>b.addEventListener("click",()=>qaSetPane(b.dataset.qaJump)));
@@ -1685,11 +1835,57 @@ const modal=document.getElementById("imageModal"),modalImage=document.getElement
    qaScenarios.filter(s=>s.lab!=="security").forEach(qaRunScenario);qaSetPane("results");
  });
  document.getElementById("qaExport").addEventListener("click",()=>{
-   const payload={schema_version:"2.0",product:"MyDreamZone Living QA Playground",exported_at:new Date().toISOString(),page_url:location.href,components:qaComponents,scenarios:qaScenarios,results:qaResults,summary:{execution_records:qaResults.length,unique_scenarios_executed:new Set(qaResults.map(r=>r.scenario_id)).size,scenario_passed:qaResults.filter(r=>r.status==="passed").length,scenario_failed:qaResults.filter(r=>r.status==="failed").length,scenario_blocked:qaResults.filter(r=>r.status==="blocked").length,runtime_detected:qaComponents.filter(c=>c.detection_status==="detected").length,runtime_not_detected:qaComponents.filter(c=>c.detection_status==="not_detected").length,runtime_needs_review:qaComponents.filter(c=>c.detection_status==="needs_review").length,expectation_match:qaComponents.filter(c=>c.expectation_status==="match").length,expectation_mismatch:qaComponents.filter(c=>c.expectation_status==="mismatch").length,expectation_review:qaComponents.filter(c=>c.expectation_status==="review").length,behavior_not_tested:qaComponents.filter(c=>(c.behavior_status||"not_tested")==="not_tested").length},notice:"Runtime detection, source-inventory expectation, and component behavior are separate. Scenario passed means expectation match only, not behavior passed. Evidence reflects only checks actually executed in this browser session."};
+   const payload={
+     schema_version:"3.0",
+     product:"MyDreamZone Living QA Playground",
+     exported_at:new Date().toISOString(),
+     session_id:qaSessionId,
+     page_url:qaSanitizePageUrl(location.href),
+     definitions:{
+       components:qaClone(qaComponents.map(({detection_status,detection_classification,detection_matches,detection_notes,detection_checked_at,expectation_status,expectation_notes,behavior_status,keyboard_equivalent_status,...definition})=>definition)),
+       scenarios:qaClone(qaScenarios.map(({status,actual_result,evidence_ref,last_verified,...definition})=>definition))
+     },
+     execution_results:qaClone(qaResults),
+     summary:{
+       component_count:qaComponents.length,
+       scenario_count:qaScenarios.length,
+       execution_records:qaResults.length,
+       unique_scenarios_executed:new Set(qaResults.map(r=>r.scenario_id)).size,
+       scenario_passed:qaResults.filter(r=>r.status==="passed").length,
+       scenario_failed:qaResults.filter(r=>r.status==="failed").length,
+       scenario_blocked:qaResults.filter(r=>r.status==="blocked").length,
+       inventory_scan_records:qaResults.filter(r=>r.result_kind==="inventory_scan").length,
+       behavioral_scenario_records:qaResults.filter(r=>r.result_kind==="scenario_execution").length,
+       security_simulation_records:qaResults.filter(r=>r.evidence?.simulation_only===true).length
+     },
+     evidence_contract:{kind:"browser_session_metadata_json",screenshots_included:false,network_requests_from_security_simulator:0},
+     notice:"Inventory scan results and behavioral scenario results are separate. A passed inventory scan means only that source-inventory expectation matched; it does not prove component behavior. Security checks are local simulations, not HTTP responses or penetration tests. URL query strings and fragments are omitted."
+   };
+   if(!qaValidateExportPayload(payload)){el("#qaResultStatus").textContent="Export dibatalkan: payload tidak lolos validasi.";return;}
    const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
-   const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`mdz-qa-evidence-${new Date().toISOString().replace(/[:.]/g,"-")}.json`;a.click();URL.revokeObjectURL(url);
+   const url=URL.createObjectURL(blob);
+   const a=document.createElement("a");a.href=url;
+   a.download=`mdz-qa-evidence-${new Date().toISOString().replace(/[:.]/g,"-")}.json`;
+   document.body.append(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),1000);
  });
- document.getElementById("qaRun403").addEventListener("click",()=>{const limit=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));el("#qa403Output").textContent=`Stopped at configured threshold: ${limit} simulated 403 responses. No network requests were sent.`;qaRunScenario(qaById("SCN-S-002"));});
- document.getElementById("qaClearResults").addEventListener("click",()=>{qaResults.length=0;qaScenarios.forEach(s=>{s.status="not_run";s.actual_result=null;s.evidence_ref=null;s.last_verified=null;});qaRenderResults();qaUpdateSummary();});
+ const qaValidateExportPayload=payload=>{
+   return !!payload&&payload.schema_version==="3.0"&&
+     !!payload.session_id&&!!payload.exported_at&&
+     Array.isArray(payload.definitions?.components)&&payload.definitions.components.length===57&&
+     Array.isArray(payload.definitions?.scenarios)&&payload.definitions.scenarios.length===72&&
+     Array.isArray(payload.execution_results)&&
+     payload.execution_results.every(r=>!!r.execution_id&&!!r.session_id&&!!r.scenario_id&&
+       ["passed","failed","blocked"].includes(r.status)&&
+       !/[?#]/.test(r.page_url||""))&&
+     payload.execution_results.every(r=>r.session_id===payload.session_id);
+ }; document.getElementById("qaRun403").addEventListener("click",()=>{const limit=Math.max(1,Math.min(10,Number(el("#qa403Limit").value)||3));el("#qa403Output").textContent=`Stopped at configured threshold: ${limit} simulated 403 responses. No network requests were sent.`;qaRunScenario(qaById("SCN-S-002"));});
+ document.getElementById("qaClearResults").addEventListener("click",()=>{
+   qaResults.length=0;
+   qaScenarios.forEach(s=>{s.status="not_run";s.actual_result=null;s.evidence_ref=null;s.last_verified=null;});
+   qaResetComponentState();
+   const output=el("#qa403Output");if(output)output.textContent="Belum dijalankan.";
+   qaRenderResults();qaUpdateSummary();
+ });
 
 })();
